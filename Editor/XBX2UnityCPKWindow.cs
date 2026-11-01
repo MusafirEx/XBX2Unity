@@ -20,6 +20,15 @@ namespace MusafirEx.XBX2Unity.Editor
         private StreamWriter outputWriter;
         private string cpkPath, extractorPath, exportRoot, currentOutput, latestExtract;
         private string status = "Ready";
+        // Tool builds use two incompatible command-line interfaces.
+        // 0: CRI CPK Tool (extract_all -p FILE -o DIR)
+        // 1: Classic CriPakTool (FILE ALL)
+        private static readonly string[] SyntaxOptions =
+        {
+            "CRI CPK Tool (extract_all -p -o)",
+            "Legacy CriPakTool (file ALL)"
+        };
+        private int cliSyntax;
         private bool cancelling, extracting;
         private int droppedLines;
         private Vector2 scroll;
@@ -58,6 +67,7 @@ namespace MusafirEx.XBX2Unity.Editor
         {
             cpkPath = EditorPrefs.GetString(Prefix + "cpk", "");
             extractorPath = EditorPrefs.GetString(Prefix + "tool", "");
+            cliSyntax = Mathf.Clamp(EditorPrefs.GetInt(Prefix + "syntax", 0), 0, 1);
             exportRoot = EditorPrefs.GetString(Prefix + "export", Path.Combine(ProjectRoot, "XBX_Exports"));
             EditorApplication.update += UpdateProcess;
             if (Selection.activeObject != null)
@@ -85,7 +95,7 @@ namespace MusafirEx.XBX2Unity.Editor
         {
             EditorGUILayout.LabelField("Xenoblade Chronicles X — Wii U CPK Archive", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "The CRIWARE .cpk file is an archive, not a mesh. This window runs an external CriPakTool.exe to list or extract its contents. CANV/CASM processing happens after CPK extraction.",
+                "CPK is an archive, not a mesh. Choose the matching CriPakTool command-line variant. Extract first; process CASM/CANV separately.",
                 MessageType.Info);
             EditorGUI.BeginDisabledGroup(Busy);
             EditorGUILayout.LabelField("CPK file", EditorStyles.boldLabel);
@@ -125,6 +135,11 @@ namespace MusafirEx.XBX2Unity.Editor
             }
             EditorGUILayout.EndHorizontal();
             if (GUILayout.Button("CriPakTools source / download", EditorStyles.linkLabel)) Application.OpenURL(CriPakUrl);
+            cliSyntax = EditorGUILayout.Popup("Tool command syntax", cliSyntax, SyntaxOptions);
+            if (cliSyntax == 0)
+                EditorGUILayout.HelpBox("The CRI CPK Tool in your logs supports extract_all and replace, but has no List command. List Archive is disabled for this syntax.", MessageType.Info);
+            else
+                EditorGUILayout.HelpBox("Legacy CLI: CriPakTool.exe \"archive.cpk\" [ALL]. This variant may support a filename-list mode.", MessageType.Info);
 
             EditorGUILayout.LabelField("Output root", EditorStyles.boldLabel);
             EditorGUILayout.BeginHorizontal();
@@ -135,9 +150,11 @@ namespace MusafirEx.XBX2Unity.Editor
                 if (!string.IsNullOrEmpty(selected)) exportRoot = selected;
             }
             EditorGUILayout.EndHorizontal();
-            EditorGUILayout.HelpBox("The original CPK stays untouched. CriPakTool writes extracted files relative to its working directory; each run uses a unique output folder.", MessageType.None);
+            EditorGUILayout.HelpBox("Original CPK stays untouched. Every run uses a unique output directory and keeps its own log.", MessageType.None);
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("List Archive", GUILayout.Height(30))) BeginOperation(false);
+            EditorGUI.BeginDisabledGroup(cliSyntax == 0);
+            if (GUILayout.Button("List Archive (legacy only)", GUILayout.Height(30))) BeginOperation(false);
+            EditorGUI.EndDisabledGroup();
             if (GUILayout.Button("Extract All", GUILayout.Height(30))) BeginOperation(true);
             EditorGUILayout.EndHorizontal();
             EditorGUI.EndDisabledGroup();
@@ -164,6 +181,7 @@ namespace MusafirEx.XBX2Unity.Editor
             {
                 EditorPrefs.SetString(Prefix + "cpk", cpkPath ?? "");
                 EditorPrefs.SetString(Prefix + "tool", extractorPath ?? "");
+                EditorPrefs.SetInt(Prefix + "syntax", cliSyntax);
                 EditorPrefs.SetString(Prefix + "export", exportRoot ?? "");
             }
         }
@@ -227,7 +245,7 @@ namespace MusafirEx.XBX2Unity.Editor
                 !string.Equals(Path.GetExtension(extractorPath), ".exe", StringComparison.OrdinalIgnoreCase) ||
                 !Path.GetFileNameWithoutExtension(extractorPath).StartsWith("CriPakTool", StringComparison.OrdinalIgnoreCase))
             {
-                EditorUtility.DisplayDialog("CriPakTool missing", "Select a CriPakTool.exe compatible with the classic IN_FILE ALL CLI syntax.", "OK");
+                EditorUtility.DisplayDialog("CriPakTool missing", "Select a CriPakTool.exe or CriPakTools.exe with the syntax chosen in the dropdown.", "OK");
                 return false;
             }
             if (string.IsNullOrWhiteSpace(exportRoot))
@@ -237,6 +255,11 @@ namespace MusafirEx.XBX2Unity.Editor
 
         private void BeginOperation(bool extract)
         {
+            if (!extract && cliSyntax == 0)
+            {
+                EditorUtility.DisplayDialog("List not supported", "The selected CRI CPK Tool CLI supports extract_all and replace but has no list command. Use Extract All or switch to a legacy tool.", "OK");
+                return;
+            }
             if (Busy || !ValidateInput()) return;
             string root = Path.GetFullPath(exportRoot);
             string sourceDir = Path.GetDirectoryName(Path.GetFullPath(cpkPath)).TrimEnd(Path.DirectorySeparatorChar);
@@ -264,10 +287,15 @@ namespace MusafirEx.XBX2Unity.Editor
                 extracting = extract;
                 outputWriter = new StreamWriter(Path.Combine(runDirectory, "CriPakTool_log.txt"), false, new UTF8Encoding(false));
                 outputWriter.AutoFlush = true;
+                string extractedDirectory = Path.Combine(runDirectory, "Contents");
+                if (extract && cliSyntax == 0) Directory.CreateDirectory(extractedDirectory);
+                string arguments = cliSyntax == 0
+                    ? "extract_all -p " + Quote(Path.GetFullPath(cpkPath)) + " -o " + Quote(extractedDirectory)
+                    : Quote(Path.GetFullPath(cpkPath)) + (extract ? " ALL" : "");
                 var si = new ProcessStartInfo
                 {
                     FileName = Path.GetFullPath(extractorPath),
-                    Arguments = Quote(Path.GetFullPath(cpkPath)) + (extract ? " ALL" : ""),
+                    Arguments = arguments,
                     WorkingDirectory = runDirectory,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -278,6 +306,7 @@ namespace MusafirEx.XBX2Unity.Editor
                 process.OutputDataReceived += (sender, e) => QueueLine(e.Data, false);
                 process.ErrorDataReceived += (sender, e) => QueueLine(e.Data, true);
                 Append("Starting " + operation + " on " + cpkPath);
+                Append("CLI: " + SyntaxOptions[cliSyntax] + " | Arguments: " + arguments);
                 if (!process.Start()) throw new IOException("Cannot start CriPakTool.exe");
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
@@ -344,7 +373,7 @@ namespace MusafirEx.XBX2Unity.Editor
                 else
                 {
                     status = extracting ? ("Finished — " + files + " extracted files") : "Archive listed — see log";
-                    if (extracting) latestExtract = currentOutput;
+                    if (extracting) latestExtract = cliSyntax == 0 ? Path.Combine(currentOutput, "Contents") : currentOutput;
                 }
                 Append("Process exit: " + code + " | files: " + files + " | " + status);
             }

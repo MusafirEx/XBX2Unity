@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2 - 2026-11-02
+- Correct CPK extraction command for CRI CPK Tool: `extract_all -p "archive.cpk" -o "output_dir"`.
+- Add explicit syntax selector; retain legacy `"archive.cpk" ALL` support.
+- Disable List Archive for the modern variant, which advertises no listing operation.
+- Keep extracted files under `Contents/` and log the exact argument pattern.
+
+
 ## 0.3.1 - 2026-11-02
 - Fix Unity magic-method warning by renaming `Start(bool)` to `BeginOperation(bool)` in the CPK editor window.
 - Provide explicit Unity `.meta` files for UPM documentation and tools to avoid immutable-package warnings.
