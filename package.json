@@ -1,0 +1,19 @@
+{
+  "name": "com.musafirex.xbx2unity",
+  "version": "0.2.0",
+  "displayName": "XBX2Unity - Xenoblade X Wii U Map Tools",
+  "description": "Editor-only audit and external CASM extraction tools for Xenoblade Chronicles X Wii U.",
+  "unity": "2022.3",
+  "keywords": [
+    "xenoblade",
+    "wiiu",
+    "casm",
+    "editor",
+    "extractor"
+  ],
+  "author": {
+    "name": "MusafirEx",
+    "url": "https://github.com/MusafirEx"
+  },
+  "license": "MIT"
+}
