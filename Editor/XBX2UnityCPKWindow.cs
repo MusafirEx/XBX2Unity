@@ -137,8 +137,8 @@ namespace MusafirEx.XBX2Unity.Editor
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.HelpBox("The original CPK stays untouched. CriPakTool writes extracted files relative to its working directory; each run uses a unique output folder.", MessageType.None);
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("List Archive", GUILayout.Height(30))) Start(false);
-            if (GUILayout.Button("Extract All", GUILayout.Height(30))) Start(true);
+            if (GUILayout.Button("List Archive", GUILayout.Height(30))) BeginOperation(false);
+            if (GUILayout.Button("Extract All", GUILayout.Height(30))) BeginOperation(true);
             EditorGUILayout.EndHorizontal();
             EditorGUI.EndDisabledGroup();
 
@@ -235,7 +235,7 @@ namespace MusafirEx.XBX2Unity.Editor
             return true;
         }
 
-        private void Start(bool extract)
+        private void BeginOperation(bool extract)
         {
             if (Busy || !ValidateInput()) return;
             string root = Path.GetFullPath(exportRoot);

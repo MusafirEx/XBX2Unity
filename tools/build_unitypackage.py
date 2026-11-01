@@ -21,7 +21,9 @@ VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["versi
 PREFIX = "Assets/Plugins/XBX2Unity"
 GUID_NAMESPACE = uuid.UUID("e12c023c-777b-4685-98d4-3cd6db168cc0")
 INCLUDE = (
-    "package.json", "README.md", "LICENSE.md", "CHANGELOG.md",
+    "package.json", "package.json.meta", "README.md", "README.md.meta",
+    "LICENSE.md", "LICENSE.md.meta", "CHANGELOG.md", "CHANGELOG.md.meta",
+    "tools.meta", "tools/build_unitypackage.py", "tools/build_unitypackage.py.meta",
     "Editor.meta",
     "Editor/XBX2UnityMapWindow.cs", "Editor/XBX2UnityMapWindow.cs.meta",
     "Editor/XBX2UnityCPKWindow.cs", "Editor/XBX2UnityCPKWindow.cs.meta",
