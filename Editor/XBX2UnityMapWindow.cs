@@ -56,8 +56,29 @@ namespace MusafirEx.XBX2Unity.Editor
         [MenuItem("Assets/XBX2Unity/Inspect Selected Files", false, 2100)]
         public static void InspectSelection()
         {
+            foreach (UnityEngine.Object obj in Selection.objects)
+            {
+                string selected = AssetDatabase.GetAssetPath(obj);
+                if (!string.IsNullOrEmpty(selected) &&
+                    string.Equals(Path.GetExtension(selected), ".cpk", StringComparison.OrdinalIgnoreCase))
+                {
+                    XBX2UnityCPKWindow.OpenSelected();
+                    return;
+                }
+            }
             var window = GetWindow<XBX2UnityMapWindow>("XBX2Unity");
             window.UseSelection();
+            window.Show();
+        }
+
+        public static void OpenAt(string directory)
+        {
+            var window = GetWindow<XBX2UnityMapWindow>("XBX2Unity");
+            if (!string.IsNullOrEmpty(directory) && Directory.Exists(directory))
+            {
+                window.source = Path.GetFullPath(directory);
+                window.Scan();
+            }
             window.Show();
         }
 
@@ -88,7 +109,13 @@ namespace MusafirEx.XBX2Unity.Editor
         private void OnGUI()
         {
             EditorGUILayout.LabelField("Xenoblade Chronicles X (Wii U) — Map Assets", EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox("CASMHD/CASMDA: extraction via external casmExtract.exe. CANVHE/CANVDA: header audit only. No native Mesh/Texture importer is included.", MessageType.Info);
+            EditorGUILayout.HelpBox("CASMHD/CASMDA: extraction via external casmExtract.exe. CANVHE/CANVDA: header audit only. For .cpk archives, use the CPK Extractor first.", MessageType.Info);
+            if (Selection.activeObject != null &&
+                string.Equals(Path.GetExtension(AssetDatabase.GetAssetPath(Selection.activeObject)), ".cpk", StringComparison.OrdinalIgnoreCase))
+            {
+                if (GUILayout.Button("Selected file is CPK — open CPK Extractor"))
+                    XBX2UnityCPKWindow.OpenSelected();
+            }
             EditorGUI.BeginDisabledGroup(Busy);
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Use Project Selection")) UseSelection();

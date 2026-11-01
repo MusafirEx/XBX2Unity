@@ -24,6 +24,7 @@ INCLUDE = (
     "package.json", "README.md", "LICENSE.md", "CHANGELOG.md",
     "Editor.meta",
     "Editor/XBX2UnityMapWindow.cs", "Editor/XBX2UnityMapWindow.cs.meta",
+    "Editor/XBX2UnityCPKWindow.cs", "Editor/XBX2UnityCPKWindow.cs.meta",
     "Editor/MusafirEx.XBX2Unity.Editor.asmdef",
     "Editor/MusafirEx.XBX2Unity.Editor.asmdef.meta",
 )
@@ -83,6 +84,7 @@ def main() -> None:
         PREFIX: None,
         f"{PREFIX}/Editor": None,
         f"{PREFIX}/Editor/XBX2UnityMapWindow.cs": "Editor/XBX2UnityMapWindow.cs",
+        f"{PREFIX}/Editor/XBX2UnityCPKWindow.cs": "Editor/XBX2UnityCPKWindow.cs",
         f"{PREFIX}/Editor/MusafirEx.XBX2Unity.Editor.asmdef": "Editor/MusafirEx.XBX2Unity.Editor.asmdef",
         f"{PREFIX}/README.md": "README.md",
         f"{PREFIX}/LICENSE.md": "LICENSE.md",

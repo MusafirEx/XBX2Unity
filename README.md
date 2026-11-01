@@ -1,46 +1,57 @@
-# XBX2Unity
+# XBX2Unity — Xenoblade Chronicles X (Wii U) archive tools
 
-Unity Editor package for inspecting Xenoblade Chronicles X **Wii U** map-file pairs and optionally running the third-party CASM extractor.
+Unity 2022.3+ Editor package for **CPK archive extraction** and inspection/external extraction of **CASM/CANV** map-file pairs. The package does not include third-party executables or game assets.
 
-## Install
+## Installation (Unity Package Manager)
 
-Unity **2022.3+**: Window > Package Manager > + > Add package from git URL:
+Window > Package Manager > + > Add package from git URL:
 
 ```
 https://github.com/MusafirEx/XBX2Unity.git#feature/unity-map-extractor-package
 ```
 
-Or import the separately distributed `.unitypackage`.
+Alternatively import the `.unitypackage` from the GitHub Actions build artifact.
 
-## Use
+## Starting with `map.cpk`
 
-1. Extract your own Wii U game dump's map files outside Unity or under `Assets/XBX`.
-2. Select the folder in Unity Project view, then open **Tools > XBX2Unity > Map Extractor**.
-3. Click **Use Project Selection** and **Write Binary Audit**.
-4. Download/build `casmExtract.exe` from [XenoToolset](https://github.com/PredatorCZ/XenoToolset), choose it in the window, then select **Extract Selected CASM**.
-5. Inspect extracted assets under `<Unity project>/XBX_Exports`. For mesh import, use a compatible Blender Xenoblade importer and export FBX separately.
+1. Select `Assets/XBX/map.cpk` in Unity's Project window.
+2. Open **Assets > XBX2Unity > Extract Selected CPK**, or **Tools > XBX2Unity > CPK Extractor**.
+3. Choose the compatible classic command-line `CriPakTool.exe` from [esperknight/CriPakTools](https://github.com/esperknight/CriPakTools). The tool must accept `CriPakTool.exe IN_FILE ALL`; do not select a GUI-only variant.
+4. Click **List Archive** first to inspect its contents. Click **Extract All** to extract. You will be prompted because extraction may require many gigabytes.
+5. Output goes to `<Unity Project>/XBX_Exports/CPK/<archive>_extract_<timestamp>/` by default. No copying of the original CPK is required. Results and process logs are isolated per run.
+6. Click **Inspect extracted CASM/CANV files** in the CPK window. This launches **Tools > XBX2Unity > Map Extractor** on the extracted folder.
 
-The wrapper copies inputs into a timestamped output directory. **It does not modify your original game files.** It does not include the third-party executable. The `-u` and `-b` options are the documented XenoToolset command options.
+For `.casmhd` + `.casmda` extraction, select `casmExtract.exe` from [XenoToolset](https://github.com/PredatorCZ/XenoToolset) in the Map Extractor window. This is a separate program. For Blender/FBX import, see [xenoblade_blender](https://github.com/ScanMountGoat/xenoblade_blender).
 
-## Supported
+## Supported features
 
-- `.casmhd` / `.casmda`: pair discovery, header audit and **external** CASM extraction.
-- `.canvhe` / `.canvda`: pair discovery and header audit only.
-- Detects missing and zero-byte files, including the observed `ma9990.casmda` case.
-- Recursive folder scan, selected groups, safe output staging, process logs and cancellation.
+- `.cpk`: selected-file handling, CRIWARE magic header check (`CPK `), list contained paths, extract all via **external CriPakTool.exe**; process logs, Stop, output separation.
+- `.casmhd`/`.casmda`: group detection, 64-byte header audit, missing/zero-byte warnings and external `casmExtract.exe` integration.
+- `.canvhe`/`.canvda`: pair detection and binary header audit only.
+- Reads files at their original location; CPK extraction does not duplicate large source archives in temporary folders.
+- Uses Windows Editor-only process execution; no runtime code or compiled native DLLs.
 
-**Not implemented:** native decoding of CASM or CANV, mesh/rig/material import, CPK extraction, and conversion to Unity Terrain. An empty `.casmda` is diagnosed, not assumed to prove corruption.
+### Important limitations
 
-## Known limitations
+- There is **no native CPK/CASM/CANV mesh or texture decoder**. Output of CPK extraction is still game data.
+- Some older CriPakTool versions may fail on archives larger than 2 GiB or other unsupported CPK variations; check the process log.
+- Game archives may contain arbitrary embedded paths; only extract CPK files from trusted personal dumps. Inspect archive contents first. The external tool performs the actual filesystem writes.
+- `ma9990.casmda` can be zero bytes in a particular dump; the tool reports this without assuming the reason.
+- Closing an extractor window or triggering a script recompile stops its active external process; incomplete output is retained.
+- Unity Editor compilation and game-data extraction require local testing; the CI package build tests packaging, **not** correct decoding.
 
-- External extraction requires Windows and a compatible `casmExtract.exe`.
-- Results depend on third-party tool version and original data quality; no successful decode is guaranteed.
-- The window must remain open during extraction. Closing or recompiling scripts cancels the running extraction.
-- The package has not been runtime-compiled in the user's Unity project; check Console after installation.
-- Outputs are created outside `Assets` by default to avoid Unity reimporting large raw archives.
+## Build distributables
 
-## Credits
+Python 3.11+:
 
-CASM extraction relies on [PredatorCZ/XenoToolset](https://github.com/PredatorCZ/XenoToolset) (GPL-3.0 external tool; **not bundled**). Blender import alternative: [ScanMountGoat/xenoblade_blender](https://github.com/ScanMountGoat/xenoblade_blender).
+```bash
+python tools/build_unitypackage.py
+```
 
-Package source code is licensed under MIT (see LICENSE.md). Game assets are not provided.
+This generates `dist/XBX2Unity-UPM-vVERSION.zip` and `dist/XBX2Unity-vVERSION.unitypackage`. GitHub Actions uploads both in the `XBX2Unity-packages` artifact.
+
+## Credits and license
+
+- [CriPakTools](https://github.com/esperknight/CriPakTools) for CRIWARE archive listing and extraction (external tool; not bundled).
+- [XenoToolset](https://github.com/PredatorCZ/XenoToolset) for CASM map extraction (external tool; not bundled).
+- XBX2Unity package source: MIT, see [LICENSE.md](LICENSE.md). Proprietary game content is not included.
