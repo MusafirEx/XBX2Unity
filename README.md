@@ -44,6 +44,18 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell MTXT deswizzle and UV test fix (v0.8.2)
+
+The user confirmed that **Raw Color Texture itself maps incorrectly** on Skell models. This diagnostic excludes gMatCol and custom paint tint; the problem must be investigated at texture block decoding, source-material selection or UV mapping.
+
+**Verified decoder defect:** `wiiu_swizzle/src/addrlib.rs` computes Wii U 2-pipe routing as `pipe_bit0 = y3 XOR x3`, but XBX2Unity v0.8.1 used `y3 XOR x4`. This shifted BC1/BC5 compressed blocks into incorrect positions even with valid source UVs. v0.8.2 fixes it and adds a Python regression test of reference address goldens and block uniqueness, run in GitHub CI before package creation.
+
+The imported material source links also show `DL019600_FL_SPM` with usage **32**, which previously passed the generic color test. Automatic base color now refuses source names ending in `_SPM`, `_RFM`, `_RF`, `_REF`, `_GLO`, `_GLW`, `_OCL`, or `_DEP`, regardless of generic usage. Explicit `_RGB`, `_COL`, `_DCL`, `_AVA` get higher score than ambiguous bare names. Manual texture index mode remains available for precise comparisons.
+
+**Unity test**: update to v0.8.2; select `dl019600.camdo` > Material, enable `Import Skell MTXT Textures`, `Auto Select Skell Color Texture`, and `Skell Color Diagnostic Shader`. Reimport. First select `Raw Color Texture`. Then try `UV0 Checkerboard (no texture)` and `UV0 Gradient (no texture)`. If checker coordinates align well with the mesh but the raw image is scrambled, inspect GX2 texture decoding. If the checker itself tears or stretches strangely, investigate source UV0 attribute coordinates and `Flip V on CAMDO UVs` (same option as Model > Flip UV V). You can compare Auto Select to manual Base Texture Slot 0/1 when source material lists explicit RGB links.
+
+**Bone/skinning unchanged**: source rig, HKT hierarchy, MXMD weight remap and `SkinnedMeshRenderer` remain the proven v0.7.2 behavior. Shader customization/animations remain later phases. CI validates package contents/address math, not real visual texture mapping in Unity.
+
 ## Skell original color / material diagnostics (v0.8.1)
 
 Unity Editor.log confirmed dl019600.camdo imports 20 MTXT texture assets and 5 mapped Skell material images, but the model has incorrect surface colors. Skinning works on 31/31 mesh draw calls.

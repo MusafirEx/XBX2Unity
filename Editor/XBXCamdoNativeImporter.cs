@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(8, "camdo")]
+    [ScriptedImporter(9, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -42,7 +42,7 @@ namespace MusafirEx.XBX2Unity.Editor
         [Tooltip("Use an unlit diagnostic shader to examine base texture, source vertex color and gMatCol.")]
         public bool skellColorDiagnosticShader = false;
         public bool skellUseVertexColor = false;
-        [Range(0, 3)] public int skellDebugView = 0;
+        [Range(0, 5)] public int skellDebugView = 0;
         [Header("Extracted Map Textures")]
         public bool bindExtractedTextures = true;
         [Range(0, 15)] public int baseTextureSlot = 0;

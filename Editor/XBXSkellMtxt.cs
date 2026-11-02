@@ -33,11 +33,28 @@ namespace MusafirEx.XBX2Unity.Editor
                     if (IsNormalData || format != 49 || usage == 16 ||
                         usage == 528 || usage == 65569) return -1;
                     string n = (sourceName ?? "").ToUpperInvariant();
-                    if (usage == 80) return 120;
-                    if (usage == 96 || usage == 48 || usage == 32 ||
-                        usage == 34 || usage == 544) return 110;
-                    if (n.Contains("_COL") || n.Contains("_RGB") ||
-                        n.Contains("_DCL") || n.Contains("_AVA")) return 100;
+                    // Xenoblade X can label SPM/RFM/RF/GLW/GLO textures
+                    // with usage 32 (which also appears on color maps).
+                    // Match source suffixes BEFORE the broad usage hint.
+                    if (n.EndsWith("_SPM", StringComparison.Ordinal) ||
+                        n.EndsWith("_GLO", StringComparison.Ordinal) ||
+                        n.EndsWith("_GLW", StringComparison.Ordinal) ||
+                        n.EndsWith("_RFM", StringComparison.Ordinal) ||
+                        n.EndsWith("_REF", StringComparison.Ordinal) ||
+                        n.EndsWith("_RF", StringComparison.Ordinal) ||
+                        n.EndsWith("_OCL", StringComparison.Ordinal) ||
+                        n.EndsWith("_DEP", StringComparison.Ordinal))
+                        return -1;
+                    // Explicit color suffix is a stronger hint than a generic
+                    // "usage 32" that some non-color textures share.
+                    if (n.EndsWith("_RGB", StringComparison.Ordinal) ||
+                        n.EndsWith("_COL", StringComparison.Ordinal) ||
+                        n.EndsWith("_DCL", StringComparison.Ordinal) ||
+                        n.EndsWith("_AVA", StringComparison.Ordinal))
+                        return 160;
+                    if (usage == 80) return 150;
+                    if (usage == 96 || usage == 48) return 140;
+                    if (usage == 32 || usage == 34 || usage == 544) return 90;
                     return 20; // BC1 without a semantic usage hint
                 }
             }
@@ -258,7 +275,10 @@ namespace MusafirEx.XBX2Unity.Editor
             int elem = pixel * blockSize;
             if (tile == 2)
                 return 64*blockSize * (x/8 + (y/8)*(pitch/8)) + elem;
-            int pipe = ((y>>3)&1) ^ ((x>>4)&1);
+            // GX2 addrlib: 2-pipe mode uses pipe_bit0 = y3 XOR x3.
+            // v0.8.1 incorrectly read x4 here and scrambled source
+            // BC1/BC5 blocks even with otherwise valid UV coordinates.
+            int pipe = ((y>>3)&1) ^ ((x>>3)&1);
             // addrlib uses ty=y/numPipes (2), not y itself.
             // bank0 = ty4 ^ x3 = y5 ^ x3;
             // bank1 = ty3 ^ x4 = y4 ^ x4.

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.2 - 2026-11-02
+- Fix a verified Wii U GX2 deswizzle address bug: BC1/BC5 D2-tiled macro pipe bit is y3 XOR x3. Previous v0.8.0/0.8.1 mistakenly used x4, scrambling 4x4 BCn block locations and making "Raw Color Texture" map incorrectly.
+- Tighten source image semantics: _SPM, _RFM, _RF, _REF, _GLO, _GLW, _OCL and _DEP are never automatically used as color, even when MXMD texture usage code is a generic 32. Prefer explicit _RGB/_COL/_DCL/_AVA color maps over ambiguous bare names.
+- Add texture-independent UV0 Gradient and UV0 Checkerboard views to Skell Color Diagnostic Shader. Expose Flip V on CAMDO UVs in Material tab to distinguish UV inversion from deswizzle.
+- Bump CAMDO ScriptedImporter to revision 9 to reimport assets. Keep proven HKT skinning, weight mappings and all animation functionality unchanged.
+- Add GX2 compressed block address regression test (golden offsets and tile collision scan) and run it before CI package build.
+- Needs visual confirmation in Unity after reimport; passing CI tests do not establish exact original shader/paint fidelity.
+
+
 ## 0.8.1 - 2026-11-02
 - Address v0.8.0 Skell MTXT images decoding but incorrect body colors.
 - Parse legacy MXMD packed/streamed texture usage flags and source image names.

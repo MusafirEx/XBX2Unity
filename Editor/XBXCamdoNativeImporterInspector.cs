@@ -80,6 +80,9 @@ namespace MusafirEx.XBX2Unity.Editor
                             "BC5/NRM texture will NEVER be assigned as base color.",
                             MessageType.Warning);
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("useSkellMaterialColor"));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("flipUVv"),
+                        new GUIContent("Flip V on CAMDO UVs",
+                            "Optional original Wii U vs Unity texture vertical axis test; also available in Model tab."));
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("skellColorDiagnosticShader"));
                     if (serializedObject.FindProperty("skellColorDiagnosticShader").boolValue)
                     {
@@ -90,13 +93,16 @@ namespace MusafirEx.XBX2Unity.Editor
                                 "Composite (texture x material x optional vertex)",
                                 "Raw Color Texture",
                                 "Source Vertex Color",
-                                "Source gMatCol" });
+                                "Source gMatCol",
+                                "UV0 Gradient (no texture)",
+                                "UV0 Checkerboard (no texture)" });
                     }
                     EditorGUILayout.HelpBox(
                         "Auto mode chooses a source BC1 color texture by the original " +
                         "MXMD usage hint (COL/RGB, etc.). BC5/NRM data are not placed " +
                         "in the albedo slot. Source gMatCol is optional. The diagnostic " +
-                        "shader can preview vertex colors independently. " +
+                        "shader can compare source texture and raw mesh UV0 (checker). " +
+                        "Use UV0 Checkerboard to separate broken UVs from wrong GX2 deswizzle. " +
                         "Check the Console material-to-texture audit after Reimport. " +
                         "The real Skell multi-pass shader is still unknown.",
                         MessageType.Info);

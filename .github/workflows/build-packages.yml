@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Verify GX2 MTXT address regression
+        run: python tools/test_gx2_address.py
       - name: Build UPM ZIP and unitypackage
         run: python tools/build_unitypackage.py
       - name: Upload packages

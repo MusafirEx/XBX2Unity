@@ -5,7 +5,7 @@ Shader "XBX2Unity/Skell Color Diagnostic"
         _MainTex ("Selected source color texture", 2D) = "white" {}
         _Color ("Original MXMD gMatCol RGBA", Color) = (1,1,1,1)
         _UseVertexColor ("Multiply source vColor", Float) = 0
-        _DebugView ("0=Composite 1=Texture 2=Vertex Color 3=gMatCol", Range(0,3)) = 0
+        _DebugView ("0=Composite 1=Texture 2=Vertex 3=gMatCol 4=UV 5=Checker", Range(0,5)) = 0
     }
 
     CGINCLUDE
@@ -43,8 +43,20 @@ Shader "XBX2Unity/Skell Color Diagnostic"
             return fixed4(tex.rgb, 1);
         if (_DebugView > 1.5 && _DebugView < 2.5)
             return fixed4(i.sourceColor.rgb, 1);
-        if (_DebugView > 2.5)
+        if (_DebugView > 2.5 && _DebugView < 3.5)
             return fixed4(_Color.rgb, 1);
+        if (_DebugView > 3.5 && _DebugView < 4.5)
+            return fixed4(frac(i.uv.x), frac(i.uv.y), 0, 1);
+        if (_DebugView > 4.5)
+        {
+            float2 gridCoord = i.uv * 12.0;
+            float parity = frac((floor(gridCoord.x) + floor(gridCoord.y)) * 0.5) * 2.0;
+            float2 cell = frac(gridCoord);
+            float line = 1.0 - step(0.055, min(cell.x, cell.y));
+            return fixed4(lerp(float3(0.18, 0.18, 0.18),
+                float3(0.85, 0.85, 0.85), parity) * (1.0 - line) +
+                float3(0.9, 0.2, 0.1) * line, 1.0);
+        }
         fixed4 tinted = tex * _Color;
         if (_UseVertexColor > 0.5)
             tinted *= i.sourceColor;
