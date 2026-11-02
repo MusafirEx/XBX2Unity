@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 - 2026-11-02
+- Begin native Skell import support from chr_dl.cpk model sets (CAMDO + CASMT + CAMTP + HKT + CEA/CES).
+- Add native big-endian Havok 2013 HKT skeleton reader (names, parent indices, TRS) following xc3_lib/hkt.rs.
+- Add opt-in (enabled when HKT companion exists) skeleton Transform hierarchy preview under CAMDO imported root; failure leaves static geometry imported.
+- Add read-only Skell Resource Audit, available in Assets and Tools menus and Model Importer Rig/Animation/Material Inspector tabs.
+- Audit companion binary magic/size, HKT bone names/parents, MTXT GX2 texture footer metadata (version, format, dimensions, tiling), and related CEA/CES resources. Reports are saved to XBX_Exports/SkellAudits.
+- No fabricated AnimationClips: motion tracks, HKT to mesh bone palettes, bone weights, bindposes and GX2 deswizzle/texture decoding are NOT implemented by this version.
+- ScriptedImporter revision 4 to trigger reimport; package builder includes Skell tool scripts and metadata.
+
+
 ## 0.6.2 - 2026-11-02
 - Add source mask selection for experimental terrain edge blending: MXMD vBlend, vertex color RGBA, base texture channel, overlay texture channel, or a constant diagnostic weight.
 - Preserve secondary stage UV1 in the Unity mesh and allow overlay texture UV0 or UV1 sampling.

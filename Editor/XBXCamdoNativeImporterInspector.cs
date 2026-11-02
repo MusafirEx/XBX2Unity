@@ -29,15 +29,41 @@ namespace MusafirEx.XBX2Unity.Editor
             }
             else if (selectedTab == 1)
             {
-                EditorGUILayout.HelpBox("Rig import is not yet implemented. Static geometry only; bones, skin weights and bindposes are not created.", MessageType.Warning);
+                EditorGUILayout.LabelField("Skell HKT Skeleton", EditorStyles.boldLabel);
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("importSkellHktHierarchy"));
+                EditorGUILayout.HelpBox(
+                    "For Skell CAMDO, reads the sibling *_rig.hkt and builds the native " +
+                    "Havok bone hierarchy/Transform nodes. Geometry remains static until " +
+                    "weight palettes, bone weights and bindposes are verified. " +
+                    "This is a skeleton preview, NOT a working SkinnedMeshRenderer.",
+                    MessageType.Warning);
+                if (GUILayout.Button("Audit Selected Skell HKT / Resources"))
+                    XBXSkellResourceAudit.RunSelected();
             }
             else if (selectedTab == 2)
             {
-                EditorGUILayout.HelpBox("Animation import is not yet implemented. MOT and other motion files are outside the scope of v0.5.0.", MessageType.Warning);
+                EditorGUILayout.LabelField("Skell Animation Sources", EditorStyles.boldLabel);
+                EditorGUILayout.HelpBox(
+                    "CEA is a CES-related event/container resource; it is not " +
+                    "a decoded AnimationClip. The Skell pack also contains " +
+                    "parts_*, mesh_*, and effect_* CES data. Their animation " +
+                    "track formats and bone bindings require additional decoding. " +
+                    "No placeholder motion clips are produced.",
+                    MessageType.Warning);
+                if (GUILayout.Button("Audit Skell Animation Companion Files"))
+                    XBXSkellResourceAudit.RunSelected();
             }
             else
             {
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("createPlaceholderMaterials"));
+                EditorGUILayout.HelpBox(
+                    "Skell chr_dl textures are MTXT GX2 surfaces in CAMDO/CASMT. " +
+                    "Unlike extracted map PNGs, they are not yet deswizzled/decoded " +
+                    "by this native importer. Audit the MTXT header/format before " +
+                    "implementing BCn surface decompression.",
+                    MessageType.Info);
+                if (GUILayout.Button("Audit Skell MTXT Textures"))
+                    XBXSkellResourceAudit.RunSelected();
                 EditorGUILayout.Space(4);
                 EditorGUILayout.LabelField("Map Texture Binding", EditorStyles.boldLabel);
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("bindExtractedTextures"));
