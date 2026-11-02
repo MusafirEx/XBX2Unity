@@ -16,6 +16,7 @@ namespace MusafirEx.XBX2Unity.Editor
         {
             internal int id, width, height, format, usage;
             internal string source, sourceName;
+            internal string bc1ChannelProfile;
             internal Texture2D texture;
             internal bool IsNormalData
             {
@@ -251,9 +252,13 @@ namespace MusafirEx.XBX2Unity.Editor
                 tex.name = "MTXT_" + source + "_" + id.ToString("D3") +
                     (format == 53 ? "_BC5" : "_BC1");
                 tex.LoadRawTextureData(raw);
+                // Source-level CPU profile BEFORE Apply drops readable data.
+                // This does not change BC1/BC5 bytes or the rendered image.
+                string profile = format == 49
+                    ? XBXSkellPaintChannelAudit.ProfileBc1(raw,width,height) : "";
                 tex.Apply(false, true);
                 return new Record { id=id, width=width, height=height, format=format,
-                    source=source, texture=tex };
+                    source=source, texture=tex, bc1ChannelProfile=profile };
             }
             catch (Exception e)
             {

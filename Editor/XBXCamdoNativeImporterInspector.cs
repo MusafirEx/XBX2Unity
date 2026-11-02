@@ -186,7 +186,24 @@ namespace MusafirEx.XBX2Unity.Editor
                     view.intValue = EditorGUILayout.Popup("Layer Debug View",
                         view.intValue, new[] { "Composite", "Raw Base Color",
                             "BC5 Normal Candidate", "SPM Specular Candidate",
-                            "RGBA RGB Companion Candidate" });
+                            "RGB Companion - Color",
+                            "Selected RGB Channel - Grayscale",
+                            "Selected RGB Channel - Threshold at 50%",
+                            "Original Mesh Vertex Colors",
+                            "RGB Companion - Normalized Channel Dominance",
+                            "Base versus RGB Companion - Difference",
+                            "BC1 Companion Alpha - Binary View" });
+                    if (view.intValue == 5 || view.intValue == 6)
+                    {
+                        var ch = serializedObject.FindProperty("skellMaskChannel");
+                        ch.intValue = EditorGUILayout.Popup("RGB Channel To Inspect",
+                            ch.intValue, new[] { "Red", "Green", "Blue", "Alpha (BC1 binary)" });
+                    }
+                    EditorGUILayout.HelpBox(
+                        "Channel views are read-only. They work without enabling Interpret " +
+                        "_RGB as Paint Mask. BC1 alpha has only 0/255 values and may be " +
+                        "fully opaque; it is not a fourth independent grayscale mask.",
+                        MessageType.Info);
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("skellUseRgbCompanionAsPaintMask"),
                         new GUIContent("Interpret _RGB as Paint Mask (Unverified)",
                             "OFF by default. Source *_RGB may not be an RGBA paint-zone mask."));
