@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(6, "camdo")]
+    [ScriptedImporter(7, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -31,6 +31,10 @@ namespace MusafirEx.XBX2Unity.Editor
         public bool importSkellBoneWeights = false;
         [Header("Material")]
         public bool createPlaceholderMaterials = true;
+        [Header("Skell Native MTXT Preview")]
+        [Tooltip("Opt-in: decode BC1/BC5 MTXT GX2 images from this CAMDO and its CASMT. Preserves rig and mesh import.")]
+        public bool importSkellMtxtTextures = false;
+        [Range(1, 256)] public int maxSkellTextures = 96;
         [Header("Extracted Map Textures")]
         public bool bindExtractedTextures = true;
         [Range(0, 15)] public int baseTextureSlot = 0;
@@ -107,8 +111,31 @@ namespace MusafirEx.XBX2Unity.Editor
                     ctx.LogImportWarning("Skell bone weights requested without a valid *_rig.hkt; " +
                         "static MeshRenderer fallback is enabled.");
 
+                // This pool is separate from map PNG binding. MTXT native
+                // Textures are registered as CAMDO subassets and selected by
+                // exact legacy MXMD material texture-index values.
+                var skellMtxt = new Dictionary<int, XBXSkellMtxt.Record>();
+                if (importSkellMtxtTextures)
+                {
+                    try
+                    {
+                        string mtxtMessage;
+                        skellMtxt = XBXSkellMtxt.Decode(bytes, companion,
+                            maxSkellTextures, out mtxtMessage);
+                        foreach (var pair in skellMtxt)
+                            ctx.AddObjectToAsset("mtxt_" + pair.Key.ToString("D4"),
+                                pair.Value.texture);
+                        ctx.LogImportWarning("Skell " + mtxtMessage +
+                            ". Source shader roles and color/normal assignments are provisional.");
+                    }
+                    catch (Exception texError)
+                    {
+                        ctx.LogImportWarning("Skell MTXT preview failed: " +
+                            texError.Message + ". Bone weights and meshes are preserved.");
+                    }
+                }
                 Dictionary<int, Material> materials = new Dictionary<int, Material>();
-                int boundBaseTextures = 0, boundBlendTextures = 0;
+                int boundBaseTextures = 0, boundBlendTextures = 0, boundSkellTextures = 0;
                 int meshHasVBlend = 0, meshHasVertexColor = 0, meshHasUv1 = 0, meshNoVBlend = 0;
                 int distinctTexturePairs = 0;
                 int missingTextureReferences = 0;
@@ -247,7 +274,23 @@ namespace MusafirEx.XBX2Unity.Editor
                                 if (mat.HasProperty("_UseVertexTint")) mat.SetFloat("_UseVertexTint", useVertexTint ? 1f : 0f);
                                 if (mat.HasProperty("_EnableBlend")) mat.SetFloat("_EnableBlend", 0f);
 
-                                if (bindExtractedTextures && textureRoot != null)
+                                if (importSkellMtxtTextures &&
+                                    materialId >= 0 && materialId < document.materials.Count)
+                                {
+                                    var ids = document.materials[materialId].textureIndices;
+                                    if (baseTextureSlot < ids.Count &&
+                                        skellMtxt.TryGetValue(ids[baseTextureSlot], out var sourceTex))
+                                    {
+                                        var skellTexture = sourceTex.texture;
+                                        if (mat.HasProperty("_BaseMap"))
+                                            mat.SetTexture("_BaseMap", skellTexture);
+                                        if (mat.HasProperty("_MainTex"))
+                                            mat.SetTexture("_MainTex", skellTexture);
+                                        boundSkellTextures++;
+                                    }
+                                }
+                                if (!importSkellMtxtTextures &&
+                                    bindExtractedTextures && textureRoot != null)
                                 {
                                     var baseTexture = ResolveTexture(ctx, document, materialId,
                                         baseTextureSlot, textureRoot, ref missingTextureReferences);
@@ -306,7 +349,8 @@ namespace MusafirEx.XBX2Unity.Editor
                 {
                     ctx.LogImportWarning("Native geometry preview: " + imported + " draw calls, " +
                         geometryCache.Count + " unique meshes. Bound extracted base textures: " +
-                        boundBaseTextures + ", experimental blended materials: " + boundBlendTextures +
+                        boundBaseTextures + ", native Skell material textures: " + boundSkellTextures +
+                        ", experimental blended materials: " + boundBlendTextures +
                         ", unresolved texture references: " + missingTextureReferences +
                         ". vBlend buffers=" + meshHasVBlend +
                         ", without vBlend=" + meshNoVBlend +

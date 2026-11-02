@@ -67,6 +67,19 @@ namespace MusafirEx.XBX2Unity.Editor
             else
             {
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("createPlaceholderMaterials"));
+                EditorGUILayout.Space(5);
+                EditorGUILayout.LabelField("Skell MTXT / GX2 Native Preview", EditorStyles.boldLabel);
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("importSkellMtxtTextures"));
+                if (serializedObject.FindProperty("importSkellMtxtTextures").boolValue)
+                {
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("maxSkellTextures"));
+                    EditorGUILayout.HelpBox(
+                        "Loads BC1/BC5 MTXT base mipmaps from CAMDO/CASMT using GX2 " +
+                        "tileMode 2/4 deswizzle. Binds selected MXMD material texture index. " +
+                        "Packed/streamed materials may need additional role mapping. " +
+                        "This is a preview, not the final original Skell shader.",
+                        MessageType.Warning);
+                }
                 EditorGUILayout.HelpBox(
                     "Skell chr_dl textures are MTXT GX2 surfaces in CAMDO/CASMT. " +
                     "Unlike extracted map PNGs, they are not yet deswizzled/decoded " +
