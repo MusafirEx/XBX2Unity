@@ -41,6 +41,8 @@ namespace MusafirEx.XBX2Unity.Editor
             }
             EditorGUILayout.LabelField("Source materials: " + manifest.entries.Count,
                 EditorStyles.miniBoldLabel);
+            if (GUILayout.Button("Export RGB Companion Channel Audit (.txt)"))
+                ExportRgbAudit(importer, manifest);
 
             if (GUILayout.Button("Extract All Generated Materials as .mat and Assign Overrides"))
             {
@@ -113,6 +115,11 @@ namespace MusafirEx.XBX2Unity.Editor
                                 " | " + (slot.inferredRole ?? "Unknown") + "]",
                                 EditorStyles.miniLabel);
                         }
+                        if (!string.IsNullOrEmpty(slot.sourceName) &&
+                            slot.sourceName.EndsWith("_RGB", StringComparison.OrdinalIgnoreCase) &&
+                            !string.IsNullOrEmpty(slot.bc1ChannelProfile))
+                            EditorGUILayout.LabelField("BC1 RGB source channel sample: " +
+                                slot.bc1ChannelProfile, EditorStyles.wordWrappedMiniLabel);
                     }
                 }
             }
@@ -120,6 +127,50 @@ namespace MusafirEx.XBX2Unity.Editor
                 EditorGUILayout.HelpBox(
                     "Showing up to 160 MXMD source material entries for Inspector responsiveness.",
                     MessageType.Info);
+        }
+
+        private static void ExportRgbAudit(XBXCamdoNativeImporter importer,
+            XBXMaterialManifest manifest)
+        {
+            string defaultName = Path.GetFileNameWithoutExtension(importer.assetPath) +
+                "_rgb_channel_audit";
+            string destination = EditorUtility.SaveFilePanel(
+                "Export MXMD RGB Channel Audit", "", defaultName, "txt");
+            if (string.IsNullOrEmpty(destination)) return;
+            var lines = new System.Text.StringBuilder();
+            lines.AppendLine("XBX2Unity MXMD RGB Companion Source Channel Audit");
+            lines.AppendLine("Source CAMDO: " + importer.assetPath);
+            lines.AppendLine("BC1 analysis is a sampled color distribution, not proof of paint-mask semantics.");
+            lines.AppendLine("BC1 alpha is either fully opaque or binary 0/255: NOT a fourth gradient zone.");
+            lines.AppendLine();
+            int found = 0;
+            foreach (XBXMaterialEntry entry in manifest.entries)
+            {
+                if (entry == null || entry.textureSlots == null) continue;
+                foreach (XBXMaterialTextureSlot slot in entry.textureSlots)
+                {
+                    if (slot == null || string.IsNullOrEmpty(slot.sourceName) ||
+                        !slot.sourceName.EndsWith("_RGB", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    found++;
+                    lines.Append("MXMD material ").Append(entry.materialIndex)
+                        .Append(" slot ").Append(slot.slot).Append(" textureId ")
+                        .Append(slot.textureId).Append(" name ").AppendLine(slot.sourceName);
+                    lines.AppendLine(slot.bc1ChannelProfile ?? "Channel profile unavailable");
+                    lines.AppendLine();
+                }
+            }
+            lines.AppendLine("Companion references: " + found);
+            try
+            {
+                File.WriteAllText(destination, lines.ToString());
+                EditorUtility.RevealInFinder(destination);
+                Debug.Log("XBX RGB source channel audit exported to " + destination);
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.DisplayDialog("Export Failed", ex.Message, "OK");
+            }
         }
 
         private static SerializedProperty Find(SerializedProperty list, int materialIndex)

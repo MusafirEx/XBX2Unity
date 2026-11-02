@@ -44,6 +44,30 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell RGB companion channel audit (v0.9.2)
+
+The user's Unity log for `dl099110.camdo` reports 28 MTXT textures, 60 vertex-color buffers and 6 source material links to `*_RGB` companions. **This does not establish which mask is used by Skell customization.** Format 49 (BC1) provides RGB but only 1-bit alpha (0 or 255), so assuming four independent RGBA paint gradients is unfounded.
+
+The new **XBXSkellPaintChannelAudit** samples each deswizzled BC1 base mip *before* `Texture2D.Apply(false,true)` drops its readable pixel data. It records per-channel R/G/B/A min, sampled mean, max, near-black and near-white fractions and a simple chromatic-fraction indicator. Data are saved in the **XBX Material Manifest**, next to the correct source material/slot/texture ID; masks are not modified.
+
+In **Material > Source MXMD Materials / Unity Remapping**, each `*_RGB` source link shows its BC1 sample summary. Use **Export RGB Companion Channel Audit (.txt)** to save an independent report to the chosen location.
+
+In **Skell Layer Preview Shader > Layer Debug View**, compare:
+- RGB Companion Color (unmodified)
+- Selected RGB Channel Grayscale (R/G/B/A)
+- Selected Channel Binary Threshold (50%)
+- Original Mesh Vertex Colors
+- Normalized RGB Channel Dominance
+- Base versus RGB Companion Difference
+- BC1 Companion Alpha (binary)
+
+Unlike v0.9.1, a companion texture is now bound to the **generated diagnostic preview** whenever present even when **Interpret _RGB as Paint Mask** is OFF. This source inspection does not recolor the mesh. Tint/mask application remains opt-in with default strength 0 and white colors; its RGBA-four-zone idea is still unproven. Previously extracted external `.mat` overrides always take precedence and are never modified.
+
+To test `dl099110.camdo`, enable Import Skell MTXT Textures and Skell Layer Preview, leave Interpret _RGB as Paint Mask OFF, and Apply/Reimport. Use mask channel R, G, B and Alpha visualizations before comparing any actual game paint color. For the generated preview to show, temporarily clear the external `.mat` override for that source material; restore it after checking.
+
+This is a diagnostic step, **not** the final source shader or an animation importer. GitHub CI tests source contracts and BC1 sample goldens, not Unity HLSL or C# compilation.
+
+
 ## Skell source-linked Normal, Specular and Paint layers (v0.9.1)
 
 v0.9.0's external `.mat` material overrides were confirmed persistent by the user. v0.9.1 builds the next **material phase**, not animations, while maintaining this exact override workflow.

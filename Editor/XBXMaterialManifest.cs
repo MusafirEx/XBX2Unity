@@ -17,6 +17,7 @@ namespace MusafirEx.XBX2Unity.Editor
         public string usageHint;
         public string decodedFormat;
         public string inferredRole;
+        public string bc1ChannelProfile;
         public Texture2D decodedTexture;
     }
 

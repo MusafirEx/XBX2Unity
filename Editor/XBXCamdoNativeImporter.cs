@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(12, "camdo")]
+    [ScriptedImporter(13, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -64,7 +64,9 @@ namespace MusafirEx.XBX2Unity.Editor
         public Color skellPaintColor2 = Color.white;
         public Color skellPaintColor3 = Color.white;
         public Color skellPaintColor4 = Color.white;
-        [Range(0, 4)] public int skellLayerDebugView = 0;
+        [Range(0, 10)] public int skellLayerDebugView = 0;
+        [Tooltip("Diagnostic selected _RGB channel: 0=Red, 1=Green, 2=Blue, 3=Alpha; no paint applied.")]
+        [Range(0, 3)] public int skellMaskChannel = 0;
         [Header("Extracted Map Textures")]
         public bool bindExtractedTextures = true;
         [Range(0, 15)] public int baseTextureSlot = 0;
@@ -197,6 +199,7 @@ namespace MusafirEx.XBX2Unity.Editor
                                 decoded.format == 53 ? "GX2 BC5" : decoded.format.ToString();
                             sourceTexture.decodedTexture = decoded.texture;
                             sourceTexture.inferredRole = XBXSkellMaterialLayers.Describe(decoded);
+                            sourceTexture.bc1ChannelProfile = decoded.bc1ChannelProfile;
                             if (slot == 0 && !string.IsNullOrEmpty(decoded.sourceName))
                                 entry.sourceName = decoded.sourceName;
                         }
@@ -493,6 +496,8 @@ namespace MusafirEx.XBX2Unity.Editor
                                                 importSkellSpecularMaps && specCandidate.IsValid ? 1f : 0f);
                                         if (mat.HasProperty("_ViewMode"))
                                             mat.SetFloat("_ViewMode", skellLayerDebugView);
+                                        if (mat.HasProperty("_MaskChannel"))
+                                            mat.SetFloat("_MaskChannel", skellMaskChannel);
                                         if (mat.HasProperty("_PaintStrength"))
                                             mat.SetFloat("_PaintStrength", skellPaintStrength);
                                         if (mat.HasProperty("_PaintColor1"))
@@ -505,15 +510,20 @@ namespace MusafirEx.XBX2Unity.Editor
                                             mat.SetColor("_PaintColor4", skellPaintColor4);
                                         if (mat.HasProperty("_UseVertexColor"))
                                             mat.SetFloat("_UseVertexColor", skellUseVertexColor ? 1f : 0f);
-                                        bool useCandidate = skellUseRgbCompanionAsPaintMask &&
-                                            rgbCandidate.IsValid && mat.HasProperty("_PaintMask");
-                                        if (mat.HasProperty("_UsePaintMask"))
-                                            mat.SetFloat("_UsePaintMask", useCandidate ? 1f : 0f);
-                                        if (useCandidate)
+                                        // Always bind source RGB to diagnostic preview
+                                        // when present; DO NOT enable painting by doing so.
+                                        // The previous version required paint opt-in even
+                                        // to inspect RGB channels (incorrect workflow).
+                                        bool hasCandidate = rgbCandidate.IsValid &&
+                                            mat.HasProperty("_PaintMask");
+                                        if (hasCandidate)
                                         {
                                             mat.SetTexture("_PaintMask", rgbCandidate.texture.texture);
                                             skellPaintCandidateBound++;
                                         }
+                                        if (mat.HasProperty("_UsePaintMask"))
+                                            mat.SetFloat("_UsePaintMask", hasCandidate &&
+                                                skellUseRgbCompanionAsPaintMask ? 1f : 0f);
                                     }
                                     if (selected == null) unmatchedSkellMaterials++;
                                     if (materialId >= 0 && materialId < manifest.entries.Count)

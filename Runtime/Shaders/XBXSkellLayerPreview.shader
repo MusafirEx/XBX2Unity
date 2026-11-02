@@ -18,7 +18,8 @@ Shader "XBX2Unity/Skell Layer Preview"
         _UseSpecularMap ("Has Specular Candidate", Float) = 0
         _UsePaintMask ("Interpret RGB as Mask (experimental)", Float) = 0
         _UseVertexColor ("Use Source Vertex Color", Float) = 0
-        _ViewMode ("0=Composite 1=Base 2=Normal 3=Specular 4=RGBA Candidate", Range(0,4)) = 0
+        _ViewMode ("Source View: Composite/Base/Normal/SPM/RGB/Channel/Threshold/Vertex/Dominance/Difference/Alpha", Range(0,10)) = 0
+        _MaskChannel ("RGB Candidate Channel (0=R,1=G,2=B,3=A)", Range(0,3)) = 0
     }
     CGINCLUDE
     #include "UnityCG.cginc"
@@ -31,7 +32,7 @@ Shader "XBX2Unity/Skell Layer Preview"
     float4 _PaintColor1, _PaintColor2, _PaintColor3, _PaintColor4;
     float _PaintStrength, _NormalStrength, _SpecularStrength;
     float _UseNormalMap, _UseSpecularMap, _UsePaintMask;
-    float _UseVertexColor, _ViewMode;
+    float _UseVertexColor, _ViewMode, _MaskChannel;
 
     struct appdata_xbx
     {
@@ -70,8 +71,29 @@ Shader "XBX2Unity/Skell Layer Preview"
             return fixed4(normalXY * 0.5 + 0.5, normalZ, 1);
         if (_ViewMode > 2.5 && _ViewMode < 3.5)
             return fixed4(specEncoded.rgb, 1);
-        if (_ViewMode > 3.5)
+        if (_ViewMode > 3.5 && _ViewMode < 4.5)
             return fixed4(maskCandidate.rgb, 1);
+        float maskChannelValue = _MaskChannel < 0.5 ? maskCandidate.r :
+            _MaskChannel < 1.5 ? maskCandidate.g :
+            _MaskChannel < 2.5 ? maskCandidate.b : maskCandidate.a;
+        if (_ViewMode > 4.5 && _ViewMode < 5.5)
+            return fixed4(maskChannelValue,maskChannelValue,maskChannelValue,1);
+        if (_ViewMode > 5.5 && _ViewMode < 6.5)
+        {
+            float binaryValue = step(0.5,maskChannelValue);
+            return fixed4(binaryValue,binaryValue,binaryValue,1);
+        }
+        if (_ViewMode > 6.5 && _ViewMode < 7.5)
+            return fixed4(i.vertexColor.rgb,1);
+        if (_ViewMode > 7.5 && _ViewMode < 8.5)
+        {
+            float strongest = max(maskCandidate.r,max(maskCandidate.g,maskCandidate.b));
+            return fixed4(maskCandidate.rgb / max(strongest,0.0001),1);
+        }
+        if (_ViewMode > 8.5 && _ViewMode < 9.5)
+            return fixed4(abs(primary.rgb-maskCandidate.rgb),1);
+        if (_ViewMode > 9.5)
+            return fixed4(maskCandidate.a,maskCandidate.a,maskCandidate.a,1);
 
         fixed4 resultColor = primary * _Color;
         if (_UseVertexColor > 0.5)

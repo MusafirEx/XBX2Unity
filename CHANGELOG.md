@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.2 - 2026-11-03
+- Add evidence-based Skell paint-mask forensic workflow, not an assumed native shader. Unity dl099110 logs show 28 decoded MTXT images, 6 RGB companion material links and 60 vertex-color buffers; this does NOT prove paint-zone/channel mapping.
+- Sample deswizzled BC1 DXT1 RGB/A channels before the CPU-readable texture data are discarded. Retain min/mean/max and near-zero/near-one fractions and chroma percentage in original MXMD material manifest for each referenced BC1 texture. Sampling is capped at roughly 16K pixels per texture.
+- Show _RGB companion channel summaries in Material Inspector and add Export RGB Companion Channel Audit (.txt) for source material/texture indices, no source file modification.
+- Add mask R/G/B/A grayscale, threshold, normalized RGB dominance, alpha, raw vertex color and source base-vs-companion difference views in Skell Layer Preview.
+- Fix v0.9.1 limitation: allow source _RGB to be bound for READ-ONLY shader diagnostics independently of opt-in paint. Tint still defaults OFF and strength zero; external .mat overrides remain untouched.
+- Clarify that BC1 alpha is binary 0/255, not a fully independent fourth grayscale channel. Original four-zone Skell paint mapping is unverified.
+- Bump ScriptedImporter to 13; add sampled BC1 regression and CI package tests. Preserve working GX2 deswizzle, material remaps, HKT skinning, animations and UV logic.
+- CI is not a Windows Unity shader compiler; test the package in the Unity editor.
+
+
 ## 0.9.1 - 2026-11-03
 - Extend v0.9.0 MXMD material manifest after the user confirmed external .mat overrides remain persistent after reimport.
 - Resolve texture roles by source MXMD per-material IDs and name/BCn cues: BC5 NRM, BC1 SPM, BC1 RFM/REF, BC1 GLO/GLW and BC1 *_RGB companion (paint meaning unverified). Add independent role slot indices and readable role labels in the Material Inspector.
