@@ -33,6 +33,9 @@ INCLUDE = (
     "Editor/XBX2UnityCPKWindow.cs", "Editor/XBX2UnityCPKWindow.cs.meta",
     "Editor/MusafirEx.XBX2Unity.Editor.asmdef",
     "Editor/MusafirEx.XBX2Unity.Editor.asmdef.meta",
+    "Runtime.meta", "Runtime/Shaders.meta",
+    "Runtime/Shaders/XBXMapVertexBlend.shader",
+    "Runtime/Shaders/XBXMapVertexBlend.shader.meta",
 )
 
 
@@ -96,6 +99,9 @@ def main() -> None:
         f"{PREFIX}/Editor/XBXCamdoHeaderAudit.cs": "Editor/XBXCamdoHeaderAudit.cs",
         f"{PREFIX}/Editor/XBX2UnityCPKWindow.cs": "Editor/XBX2UnityCPKWindow.cs",
         f"{PREFIX}/Editor/MusafirEx.XBX2Unity.Editor.asmdef": "Editor/MusafirEx.XBX2Unity.Editor.asmdef",
+        f"{PREFIX}/Runtime": None,
+        f"{PREFIX}/Runtime/Shaders": None,
+        f"{PREFIX}/Runtime/Shaders/XBXMapVertexBlend.shader": "Runtime/Shaders/XBXMapVertexBlend.shader",
         f"{PREFIX}/README.md": "README.md",
         f"{PREFIX}/LICENSE.md": "LICENSE.md",
         f"{PREFIX}/CHANGELOG.md": "CHANGELOG.md",
@@ -109,8 +115,9 @@ def main() -> None:
                 source_meta = corresponding_meta.read_bytes() if corresponding_meta.exists() else meta(dest, folder=False)
             else:
                 contents = b""
-                corresponding_meta = ROOT / (("Editor.meta" if dest.endswith("/Editor") else "") )
-                source_meta = (ROOT / "Editor.meta").read_bytes() if dest.endswith("/Editor") else meta(dest, folder=True)
+                relative = dest[len(PREFIX):].lstrip("/")
+                folder_meta = ROOT / (relative + ".meta")
+                source_meta = folder_meta.read_bytes() if folder_meta.is_file() else meta(dest, folder=True)
             # Existing .meta GUIDs are stable across UPM and manual .unitypackage.
             import re
             m = re.search(rb"(?m)^guid:\s*([0-9a-f]{32})\s*$", source_meta)

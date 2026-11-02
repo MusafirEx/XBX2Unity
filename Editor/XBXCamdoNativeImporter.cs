@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(1, "camdo")]
+    [ScriptedImporter(2, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -27,6 +27,16 @@ namespace MusafirEx.XBX2Unity.Editor
         public bool importVertexColors = true;
         [Header("Material")]
         public bool createPlaceholderMaterials = true;
+        [Header("Extracted Map Textures")]
+        public bool bindExtractedTextures = true;
+        [Range(0, 15)] public int baseTextureSlot = 0;
+        [Header("Experimental Map Edge Blend")]
+        public bool enableExperimentalEdgeBlend = false;
+        [Range(0, 15)] public int blendTextureSlot = 1;
+        [Range(0, 3)] public int blendChannel = 0;
+        [Range(0f, 1f)] public float blendThreshold = 0.5f;
+        [Range(0.001f, 0.5f)] public float blendSoftness = 0.12f;
+        public bool useVertexTint = false;
 
         public override void OnImportAsset(AssetImportContext ctx)
         {
@@ -45,6 +55,11 @@ namespace MusafirEx.XBX2Unity.Editor
                 var document = reader.Parse(File.Exists(companion) ? companion : null);
 
                 Dictionary<int, Material> materials = new Dictionary<int, Material>();
+                int boundBaseTextures = 0, boundBlendTextures = 0;
+                int missingTextureReferences = 0;
+                string textureRoot = FindMapTextureRoot(ctx.assetPath);
+                if (!string.IsNullOrEmpty(document.textureMetadataWarning))
+                    ctx.LogImportWarning("CAMDO texture metadata: " + document.textureMetadataWarning);
                 var geometryCache = new Dictionary<long, Mesh>();
                 int meshLimit = 8000;
 
@@ -104,12 +119,45 @@ namespace MusafirEx.XBX2Unity.Editor
                             int materialId = (int)draw.materialIndex;
                             if (!materials.TryGetValue(materialId, out mat))
                             {
-                                Shader shader = Shader.Find("Universal Render Pipeline/Lit") ??
-                                    Shader.Find("HDRP/Lit") ?? Shader.Find("Standard") ?? Shader.Find("Unlit/Color");
+                                Shader shader = enableExperimentalEdgeBlend
+                                    ? Shader.Find("XBX2Unity/Map Vertex Blend") : null;
+                                if (shader == null)
+                                    shader = Shader.Find("Universal Render Pipeline/Lit") ??
+                                        Shader.Find("HDRP/Lit") ?? Shader.Find("Standard") ?? Shader.Find("Unlit/Texture");
                                 if (shader == null) throw new InvalidDataException("No supported material shader is available.");
                                 mat = new Material(shader) { name = "mat_" + materialId.ToString("D4") };
                                 if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", Color.white);
                                 if (mat.HasProperty("_Color")) mat.SetColor("_Color", Color.white);
+                                if (mat.HasProperty("_BlendChannel")) mat.SetFloat("_BlendChannel", blendChannel);
+                                if (mat.HasProperty("_BlendThreshold")) mat.SetFloat("_BlendThreshold", blendThreshold);
+                                if (mat.HasProperty("_BlendSoftness")) mat.SetFloat("_BlendSoftness", blendSoftness);
+                                if (mat.HasProperty("_UseVertexTint")) mat.SetFloat("_UseVertexTint", useVertexTint ? 1f : 0f);
+                                if (mat.HasProperty("_EnableBlend")) mat.SetFloat("_EnableBlend", 0f);
+
+                                if (bindExtractedTextures && textureRoot != null)
+                                {
+                                    var baseTexture = ResolveTexture(ctx, document, materialId,
+                                        baseTextureSlot, textureRoot, ref missingTextureReferences);
+                                    if (baseTexture != null)
+                                    {
+                                        if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", baseTexture);
+                                        if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", baseTexture);
+                                        boundBaseTextures++;
+                                    }
+                                    // Slot 1 might be a normal map or shader lookup. Never
+                                    // turn on blending without the explicit opt-in toggle.
+                                    if (enableExperimentalEdgeBlend && shader.name == "XBX2Unity/Map Vertex Blend")
+                                    {
+                                        var blendTexture = ResolveTexture(ctx, document, materialId,
+                                            blendTextureSlot, textureRoot, ref missingTextureReferences);
+                                        if (baseTexture != null && blendTexture != null)
+                                        {
+                                            mat.SetTexture("_BlendTex", blendTexture);
+                                            mat.SetFloat("_EnableBlend", 1f);
+                                            boundBlendTextures++;
+                                        }
+                                    }
+                                }
                                 materials.Add(materialId, mat);
                                 ctx.AddObjectToAsset("material_" + materialId.ToString("D4"), mat);
                             }
@@ -128,8 +176,10 @@ namespace MusafirEx.XBX2Unity.Editor
                 else
                 {
                     ctx.LogImportWarning("Native geometry preview: " + imported + " draw calls, " +
-                        geometryCache.Count + " unique meshes. Supports CASMT external geometry for " +
-                        "casmExtract map terrain/objects. Textures/materials, rigs and animation remain incomplete.");
+                        geometryCache.Count + " unique meshes. Bound extracted base textures: " +
+                        boundBaseTextures + ", experimental blended materials: " + boundBlendTextures +
+                        ", unresolved texture references: " + missingTextureReferences +
+                        ". Map material shader interpretation remains experimental.");
                 }
             }
             catch (Exception e)
@@ -139,6 +189,58 @@ namespace MusafirEx.XBX2Unity.Editor
             }
             ctx.AddObjectToAsset("main", root);
             ctx.SetMainObject(root);
+        }
+
+        // Exact file-layout mapping from casmExtract, not basename guessing:
+        // textures/<container>/<four digit id>.png for cached terrain,
+        // textures/<four digit id>.png for uncached object textures.
+        private static string FindMapTextureRoot(string assetPath)
+        {
+            string folder = Path.GetDirectoryName(assetPath).Replace('\\', '/');
+            for (int i = 0; i < 4 && !string.IsNullOrEmpty(folder); i++)
+            {
+                string candidate = folder + "/textures";
+                if (AssetDatabase.IsValidFolder(candidate)) return candidate;
+                folder = Path.GetDirectoryName(folder)?.Replace('\\', '/');
+            }
+            return null;
+        }
+
+        private static Texture2D ResolveTexture(AssetImportContext ctx, LegacyCamdoReader.Document doc,
+            int materialId, int slot, string textureRoot, ref int missing)
+        {
+            if (materialId < 0 || materialId >= doc.materials.Count) return null;
+            var material = doc.materials[materialId];
+            if (slot < 0 || slot >= material.textureIndices.Count) return null;
+            int id = material.textureIndices[slot];
+            if (id < 0 || id >= doc.externalTextures.Count) { missing++; return null; }
+            var ext = doc.externalTextures[id];
+            int fileId;
+            string relative;
+            if (ext.externalId < 0)
+            {
+                // Cached: textureID indexes a texture inside a cached container.
+                if (ext.containerId < 0 || ext.textureId < 0) { missing++; return null; }
+                fileId = ext.textureId;
+                relative = ext.containerId + "/" + fileId.ToString("D4");
+            }
+            else
+            {
+                // Uncached: externalTextureID addresses the global textures list.
+                fileId = ext.externalId;
+                relative = fileId.ToString("D4");
+            }
+
+            foreach (string suffix in new[] { ".png", ".dds", ".tga" })
+            {
+                string asset = textureRoot + "/" + relative + suffix;
+                Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(asset);
+                if (tex == null) continue;
+                ctx.DependsOnSourceAsset(asset);
+                return tex;
+            }
+            missing++;
+            return null;
         }
 
         private Mesh BuildMesh(LegacyCamdoReader reader, LegacyCamdoReader.VertexBuffer buffer,
@@ -152,6 +254,7 @@ namespace MusafirEx.XBX2Unity.Editor
             var normal = buffer.Find(28, 32, 34, 37);
             var uv = buffer.Find(5, 6, 7, 8, 9, 10, 11, 12, 13);
             var color = buffer.Find(17, 35);
+            var blend = buffer.Find(14); // vBlend = UNorm8x4, independent of vColor.
             var tangent = buffer.Find(29, 40);
 
             int count = buffer.count;
@@ -159,6 +262,7 @@ namespace MusafirEx.XBX2Unity.Editor
             Vector3[] normals = normal == null ? null : new Vector3[count];
             Vector2[] texCoords = uv == null ? null : new Vector2[count];
             Color32[] colors = color == null || !importVertexColors ? null : new Color32[count];
+            var blendWeights = blend == null || blend.size < 4 ? null : new List<Vector4>(count);
             Vector4[] tangents = tangent == null ? null : new Vector4[count];
             bool mirror = flipX;
             for (int i = 0; i < count; i++)
@@ -187,6 +291,13 @@ namespace MusafirEx.XBX2Unity.Editor
                     int c = baseOffset + color.offset;
                     colors[i] = new Color32(reader.U8(c), reader.U8(c + 1),
                         reader.U8(c + 2), reader.U8(c + 3));
+                }
+                if (blendWeights != null)
+                {
+                    int b = baseOffset + blend.offset;
+                    blendWeights.Add(new Vector4(reader.U8(b) / 255f,
+                        reader.U8(b + 1) / 255f, reader.U8(b + 2) / 255f,
+                        reader.U8(b + 3) / 255f));
                 }
                 if (tangents != null)
                 {
@@ -220,6 +331,7 @@ namespace MusafirEx.XBX2Unity.Editor
             result.triangles = triangles;
             if (texCoords != null) result.uv = texCoords;
             if (colors != null) result.colors32 = colors;
+            if (blendWeights != null) result.SetUVs(2, blendWeights);
             if (normals != null) result.normals = normals;
             else result.RecalculateNormals();
             if (tangents != null) result.tangents = tangents;
@@ -271,9 +383,20 @@ namespace MusafirEx.XBX2Unity.Editor
             public List<Draw> meshes = new List<Draw>();
             public Geometry geometry;
         }
+        public sealed class MaterialInfo
+        {
+            public List<int> textureIndices = new List<int>();
+        }
+        public sealed class ExternalTexture
+        {
+            public int textureId, containerId, externalId;
+        }
         public sealed class Document
         {
             public List<Model> models = new List<Model>();
+            public List<MaterialInfo> materials = new List<MaterialInfo>();
+            public List<ExternalTexture> externalTextures = new List<ExternalTexture>();
+            public string textureMetadataWarning;
         }
 
         private readonly byte[] bytes;
@@ -414,6 +537,11 @@ namespace MusafirEx.XBX2Unity.Editor
                 output.models.Add(model);
             }
 
+            // Material and texture metadata should never break a valid geometry
+            // import. Invalid preview links fall back to the grey material.
+            try { ParseTextureMetadata(output); }
+            catch (InvalidDataException e) { output.textureMetadataWarning = e.Message; }
+
             if (vertexRaw != 0)
             {
                 // Character/Skybox CAMDO: geometry embedded in the CAMDO.
@@ -502,6 +630,53 @@ namespace MusafirEx.XBX2Unity.Editor
             }
 
             return output;
+        }
+
+        private void ParseTextureMetadata(Document document)
+        {
+            uint materialPointer = U32(0x0C);
+            if (materialPointer != 0)
+            {
+                int materialsBase = Relative(0, 0x0C);
+                int materialsArray = Relative(materialsBase, materialsBase);
+                int materialCount = Count(materialsBase + 4, 8192, "materials");
+                if (materialCount > 0 && materialsArray == 0)
+                    throw new InvalidDataException("Material table pointer is missing");
+                // MXMD legacy Material = 132 B, textures offset/count = +0x3C/+0x40.
+                Range(materialsArray, (long)materialCount * 132);
+                for (int i = 0; i < materialCount; i++)
+                {
+                    int materialAt = checked(materialsArray + i * 132);
+                    int linkArray = Relative(materialsBase, materialAt + 60);
+                    int linkCount = Count(materialAt + 64, 256, "material texture links");
+                    if (linkCount > 0 && linkArray == 0)
+                        throw new InvalidDataException("Material " + i + " link table is missing");
+                    Range(linkArray, (long)linkCount * 4);
+                    var material = new MaterialInfo();
+                    for (int j = 0; j < linkCount; j++)
+                        material.textureIndices.Add(U16(linkArray + j * 4));
+                    document.materials.Add(material);
+                }
+            }
+
+            uint externalPtr = U32(0x34);
+            int externalCount = Count(0x38, 65536, "external texture records");
+            if (externalCount == 0) return;
+            if (externalPtr == 0) throw new InvalidDataException("External texture array pointer is null");
+            int records = Relative(0, 0x34);
+            // casmExtract writes records of 4 x signed 16-bit values:
+            // textureID, resolved containerID, externalTextureID, unknown.
+            Range(records, (long)externalCount * 8);
+            for (int i = 0; i < externalCount; i++)
+            {
+                int at = checked(records + i * 8);
+                document.externalTextures.Add(new ExternalTexture
+                {
+                    textureId = unchecked((short)U16(at)),
+                    containerId = unchecked((short)U16(at + 2)),
+                    externalId = unchecked((short)U16(at + 4))
+                });
+            }
         }
 
         private Geometry ParseGeometry(int vertexBase)

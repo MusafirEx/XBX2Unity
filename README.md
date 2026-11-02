@@ -20,6 +20,37 @@ The first native importer in v0.5.0 incorrectly decoded MXMD metadata as little-
 After upgrading the package, right-click `Assets/XBX/ma9990/terrain/0.camdo` and select **Reimport**. If a later geometry parsing issue appears, copy its exact error and a small sample file for focused binary debugging. Packaging CI does not compile or run Unity Editor.
 
 
+## Native map textures & experimental edge blending (v0.6.0)
+
+**No glTF conversion**. The native \`.camdo\` ScriptedImporter now also reads Wii U MXMD v10040 **material texture links** and **external texture mapping records**, then binds the extracted textures located under the same stage's \`textures/\` directory. The optional **Map Vertex Blend** shader uses the source \`vBlend\` attribute (type 14, UNorm8x4) for a two-layer edge-blend preview.
+
+### Exact texture paths from XenoToolset casmExtract
+
+Given \`Assets/XBX/ma9990/terrain/0.camdo\`, texture assets are searched under \`Assets/XBX/ma9990/textures/\`:
+
+- **Cached stage textures**: \`textures/<containerId>/<textureId:D4>.png\` — for example \`textures/0/0001.png\`.
+- **Uncached/global textures**: \`textures/<externalTextureId:D4>.png\` — for example \`textures/0001.png\`.
+- \`.dds\` and \`.tga\` are accepted only at the **same exact mapped path**, when the extractor used a different texture export format.
+
+The internal mapping comes from the four \`int16\` fields of each external texture record and the material's \`texture_index\` entries. This preserves the extractor's texture container ID and texture ID semantics rather than assigning random textures. See [XenoToolset casmExtract](https://github.com/PredatorCZ/XenoToolset/blob/master/casmExtract/casmExtract.cpp) and [xc3_lib's MXMD legacy parser](https://github.com/ScanMountGoat/xc3_lib/blob/main/xc3_lib/src/mxmd/legacy.rs).
+
+### Unity Inspector
+
+1. Update XBX2Unity from \`main\`.
+2. Select \`Assets/XBX/ma9990/terrain/0.camdo\` → Inspector → **Material** tab.
+3. Enable **Bind Extracted Textures** and start with **Base Texture Slot = 0**. Click Apply and reimport.
+4. Check whether the material uses the expected diffuse PNG. **Material slot order is not verified as the original game's diffuse/normal/overlay ordering.** Change Base Texture Slot to inspect a different linked texture, if necessary.
+5. If the material has two confirmed diffuse/albedo layers, enable **Experimental Edge Blend**, choose **Blend Texture Slot** and the **vBlend Channel (R/G/B/A)**. Tune **Threshold** and **Softness** for the visible transition. The shader does not infer which color channel is the original edge weight.
+
+The generated shaders use \`XBX2Unity/Map Vertex Blend\` (an unlit diagnostic two-layer shader) and are included under \`Runtime/Shaders/\` in both UPM and \`.unitypackage\` builds. Unity Built-in and URP are targeted; HDRP shader support has **not** been validated. When experimental blending is off, native material preview uses the active render pipeline's Lit shader (URP Lit, HDRP Lit or Built-in Standard).
+
+### What is and isn't reconstructed
+
+- **Implemented:** indexed preview texture lookup, importer dependency tracking on found texture assets, UV0, source vColor optional tint, separate source vBlend data in Unity Mesh.uv3, 2-layer linear blend with controllable channel/threshold/softness.
+- **Not implemented:** exact Xenoblade X shader stages and texture roles, true game terrain edge shading, splat/height mask transforms, multi-UV layer routing, PBR maps, LOD seam correction, automatic world-space placement, full material alpha/transparency.
+- **Verification:** GitHub Actions currently tests packaging only. Actual binding and blending on \`ma9990\` require a local Unity reimport. Keep **Experimental Edge Blend** off by default to avoid blending a normal map as if it were an albedo texture.
+
+
 ### Native map CAMDO/CASMT geometry support (v0.5.3)
 
 The user's `terrain/0.camdo` header is **not broken**: it has `Models[0x08] = 0x44`, `VertexData[0x14] = 0`, `ExternalBufferIDs[0x28] = 0xE64` and `ExternalBufferCount[0x2C] = 0xFFFFFFFF`. This is the map-extracted CAMDO layout produced by [PredatorCZ/XenoToolset `casmExtract`](https://github.com/PredatorCZ/XenoToolset/blob/master/casmExtract/casmExtract.cpp). That extractor deliberately uses no internal vertex pointer for map terrain and writes the actual geometry into the adjacent `.casmt` file.
