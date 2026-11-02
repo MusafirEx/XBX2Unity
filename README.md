@@ -13,6 +13,12 @@ https://github.com/MusafirEx/XBX2Unity.git#feature/unity-map-extractor-package
 Alternatively import the `.unitypackage` from the GitHub Actions build artifact.
 
 
+### Native importer endianness fix (v0.5.1)
+
+The first native importer in v0.5.0 incorrectly decoded MXMD metadata as little-endian. The user's Unity Editor.log repeatedly reported `Unsupported MXMD version: 942080000 (expected Wii U 10040)` for `ma9990` models. This is a byte-order error: `00 00 27 38` is `10040` big-endian but `942080000` little-endian. **v0.5.1 fixes the version, pointers, counts, vertex descriptors and triangle index reads to big-endian**.
+
+After upgrading the package, right-click `Assets/XBX/ma9990/terrain/0.camdo` and select **Reimport**. If a later geometry parsing issue appears, copy its exact error and a small sample file for focused binary debugging. Packaging CI does not compile or run Unity Editor.
+
 ## Native CAMDO importer (experimental v0.5.0, no GLTF conversion required)
 
 XBX2Unity now includes **XBXCamdoNativeImporter**, a pure C# Unity 2022.3 `ScriptedImporter` for `.camdo` files from **Wii U Xenoblade Chronicles X** using the `MXMD` `10040` format. It follows the same basic Editor/import asset workflow as [EMD2Unity](https://github.com/MusafirEx/EMD2Unity) and [Bress2Unity](https://github.com/MusafirEx/Bress2Unity).
