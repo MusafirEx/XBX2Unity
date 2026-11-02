@@ -44,6 +44,19 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell source texture selection and _RGB companion (v0.8.4)
+
+The Unity `dl109100.camdo` Editor.log from November 2, 2026 reports **24 MTXT textures decoded, 7 material textures bound, 38 draw calls**, with the first five applicable material groups automatically picking `*_RGB` texture variants because v0.8.3 assigned them a score of 160 vs 90 for unsuffixed base textures. Source entries include `DL109100_FL` alongside `DL109100_FL_RGB`, `DMG`/ `DMG_RGB`, `DL109100_CP`/`_RGB`, `DL109100_SKY`/`_RGB`, and `DL109100`/`_RGB`.
+
+**Source semantics are not confirmed.** Since Skell has customizable paint, `*_RGB` may be a specialized paint or composite input instead of the surface's default base color. We no longer force these textures as albedo.
+
+**New option:** select `dl109100.camdo`, Inspector **Material > Import Skell MTXT Textures > Auto Select Skell Color Texture**. Leave **Prefer Skell _RGB as Albedo** **OFF** (new default) and Reimport. This prefers the primary unsuffixed BC1 texture (e.g. `DL109100_FL`) when available, without changing the original source texture index table. Turn it ON only to compare the `*_RGB` companion. For manual comparison disable Auto Select and choose Base Texture Slot 0 or 1. BC5 normal maps remain excluded from base color.
+
+V0.8.4 also excludes role tokens `_RFM_B`, `_NRM_B`, `_GLW_B` and similar variant-suffixed data maps, which were previously sometimes misclassified. The original Wii U 2D texture decode and working HKT/SkinnedMeshRenderer are unchanged.
+
+**Verification:** The CI source heuristic regression checks all seven `dl109100` logged material groups in both modes. It does not reproduce original game Skell paint or prove which image is visually correct. Confirm in Unity with Raw Color Texture after Reimport and inspect the Console's `Skell material X rgbPreference=... selected slot=...` diagnostics.
+
+
 ## Skell diagnostic shader syntax fix (v0.8.3)
 
 Unity 2022.3 D3D11 `Editor.log` reported:

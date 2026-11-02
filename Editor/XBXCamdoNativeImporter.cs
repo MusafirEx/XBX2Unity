@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(9, "camdo")]
+    [ScriptedImporter(10, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -37,6 +37,8 @@ namespace MusafirEx.XBX2Unity.Editor
         [Range(1, 256)] public int maxSkellTextures = 96;
         [Tooltip("Prioritize source BC1 color/usage over the material's first slot. Never auto-assign BC5 normal data to albedo.")]
         public bool autoSelectSkellColorTexture = true;
+        [Tooltip("Experimental. Prefer Skell *_RGB companion textures as albedo instead of the primary unsuffixed texture. OFF by default: _RGB may be a customizable paint layer.")]
+        public bool preferSkellRgbCompanionAsAlbedo = false;
         [Tooltip("Multiply the base texture by MXMD legacy Material.color (gMatCol).")]
         public bool useSkellMaterialColor = true;
         [Tooltip("Use an unlit diagnostic shader to examine base texture, source vertex color and gMatCol.")]
@@ -322,7 +324,7 @@ namespace MusafirEx.XBX2Unity.Editor
                                         {
                                             if (!skellMtxt.TryGetValue(ids[slot], out var candidate))
                                                 continue;
-                                            int score = candidate.ColorScore;
+                                            int score = candidate.ScoreAsAlbedo(preferSkellRgbCompanionAsAlbedo);
                                             if (score > bestScore)
                                             {
                                                 bestScore = score;
@@ -361,6 +363,7 @@ namespace MusafirEx.XBX2Unity.Editor
                                     {
                                         var info = new System.Text.StringBuilder();
                                         info.Append("Skell material ").Append(materialId)
+                                            .Append(" rgbPreference=").Append(preferSkellRgbCompanionAsAlbedo)
                                             .Append(" selected slot=").Append(selectedSlot)
                                             .Append(" sourceTexture=").Append(selected == null
                                                 ? "(none)" : selected.texture.name)
@@ -375,7 +378,8 @@ namespace MusafirEx.XBX2Unity.Editor
                                                 info.Append(" fmt=").Append(tex.format)
                                                     .Append(" usage=").Append(tex.usage)
                                                     .Append(" name=").Append(tex.sourceName)
-                                                    .Append(" score=").Append(tex.ColorScore);
+                                                    .Append(" score=").Append(tex.ScoreAsAlbedo(
+                                                        preferSkellRgbCompanionAsAlbedo));
                                             else info.Append(" missing");
                                             info.Append("] ");
                                         }
