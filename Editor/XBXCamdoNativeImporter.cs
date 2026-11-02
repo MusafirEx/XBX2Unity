@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(3, "camdo")]
+    [ScriptedImporter(4, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -25,6 +25,8 @@ namespace MusafirEx.XBX2Unity.Editor
         public bool reverseFaces = false;
         public bool flipUVv = false;
         public bool importVertexColors = true;
+        [Header("Skell HKT Skeleton Preview")]
+        public bool importSkellHktHierarchy = true;
         [Header("Material")]
         public bool createPlaceholderMaterials = true;
         [Header("Extracted Map Textures")]
@@ -62,6 +64,32 @@ namespace MusafirEx.XBX2Unity.Editor
                 var bytes = File.ReadAllBytes(ctx.assetPath);
                 var reader = new LegacyCamdoReader(bytes);
                 var document = reader.Parse(File.Exists(companion) ? companion : null);
+
+                // Skell models have a sibling *_rig.hkt Havok skeleton. Build the
+                // native transform hierarchy, but do NOT claim skinned renderers
+                // or animation tracks until bone palettes/weights are decoded.
+                string rigPath = Path.Combine(
+                    Path.GetDirectoryName(ctx.assetPath) ?? string.Empty,
+                    Path.GetFileNameWithoutExtension(ctx.assetPath) + "_rig.hkt");
+                if (importSkellHktHierarchy && File.Exists(rigPath))
+                {
+                    ctx.DependsOnSourceAsset(rigPath);
+                    try
+                    {
+                        var hkt = XBXSkellHktRig.Read(rigPath);
+                        var rigRoot = XBXSkellHktRig.Build(hkt, flipX, modelScale);
+                        rigRoot.transform.SetParent(root.transform, false);
+                        ctx.LogImportWarning("Skell HKT skeleton hierarchy: " +
+                            hkt.bones.Count + " bones imported from " + rigPath +
+                            ". Geometry is still STATIC: no verified bone weights/bindposes " +
+                            "or motion tracks have been applied.");
+                    }
+                    catch (Exception rigError)
+                    {
+                        ctx.LogImportWarning("Skell HKT hierarchy preview could not be built: " +
+                            rigError.Message + ". Static CAMDO geometry is unaffected.");
+                    }
+                }
 
                 Dictionary<int, Material> materials = new Dictionary<int, Material>();
                 int boundBaseTextures = 0, boundBlendTextures = 0;

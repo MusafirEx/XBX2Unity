@@ -7,7 +7,7 @@ Unity 2022.3+ Editor package for **CPK archive extraction** and inspection/exter
 Window > Package Manager > + > Add package from git URL:
 
 ```
-https://github.com/MusafirEx/XBX2Unity.git#feature/unity-map-extractor-package
+https://github.com/MusafirEx/XBX2Unity.git
 ```
 
 Alternatively import the `.unitypackage` from the GitHub Actions build artifact.
@@ -42,6 +42,33 @@ To test the source terrain mask rather than guessing:
 **Important:** All these blend modes are experiments to identify original vertex/texture controls. They do **not** reproduce the exact original Xenoblade X terrain shader. Source material slot 1 might be a normal map or packed mask, and many meshes may not carry type-14 vBlend. The source mask and overlay texture must be verified visually before relying on the result.
 
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
+
+
+## Native Skell pipeline (v0.7.0, first working stage)
+
+The `chr_dl.cpk` archive contains model groups such as `dl019100.camdo`, `dl019100.casmt`,
+`dl019100.camtp`, `dl019100_rig.hkt`, and `.cea/.ces/.efp` companions. The Unity folder audit on November 2, 2026 observed **19 CAMDO models with a combined 968 successful static draw calls**, 19 HKT skeleton files and no separately extracted PNG textures.
+
+### Added in this release
+
+- **HKT hierarchy preview:** the CAMDO importer now looks for a same-name `*_rig.hkt`, verifies Havok packfile header `57 E0 E0 57 10 C0 C0 10`, reads named bones, parenting, local translation/quaternion/scale from the documented big-endian HKT subset, and creates a `Skell_Rig` transform hierarchy. This is enabled in the **Rig** tab. The HKT parser is new and has not yet been tested with the user's raw binary files; if an unexpected variant is detected, it logs a warning and still imports the static meshes.
+- **Skell resource audit:** select a Skell `.camdo` and choose **Assets > XBX2Unity > Audit Skell Textures Rig Animation** or **Tools > XBX2Unity > Audit Selected Skell Resources**. The audit is read-only and writes `XBX_Exports/SkellAudits/<model>_skell_resources.txt`. It lists CAMDO/CASMT/CAMTP/HKT/CEA/EFP sizes and magic, skeleton bone/parent names, candidate valid big-endian MTXT footer records inside CAMDO/CASMT (dimensions, GX2 surface format, tile mode), and related CES event files.
+- **Rig and Animation Inspector tabs:** advertise precisely what is implemented and provide one-click source audits.
+
+### Status and what is needed to finish
+
+| Feature | Status |
+| --- | --- |
+| Skell CAMDO static geometry | Working on 19 models in current Unity logs |
+| Skell HKT transform/bone hierarchy | Reader implemented; **pending actual HKT runtime verification** |
+| True SkinnedMeshRenderer with weights/bindposes and bone mapping | **Not implemented** |
+| Skell texture extraction from MTXT GX2 surfaces | **Not implemented** (metadata audit only); GX2 deswizzle and BCn decode are required |
+| CEA/CES source report | Implemented read-only metadata inventory |
+| Real keyed animations / humanoid or generic Avatar | **Not implemented**, no fabricated motion tracks |
+
+To continue accurate decoding, share the generated `dl019100_skell_resources.txt` report. It will identify the HKT parse status and raw MTXT format metadata. Additional parsing of the original Skell `.camdo/.casmt/.hkt` and actual animation stream bytes is needed for a finished rig and clips. Source reference: [xc3_lib's Wii U MTXT and HKT parsers](https://github.com/ScanMountGoat/xc3_lib/tree/main/xc3_lib/src).
+
+**Source safety:** this importer never edits game archives or claims a static skeleton preview is a working skinned Skell.
 
 
 ## Native map textures & experimental edge blending (v0.6.0)
