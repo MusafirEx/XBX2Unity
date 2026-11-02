@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.2 - 2026-11-02
+- Diagnose CAMDO MXMD 10040 'Missing Models/VertexData root pointers' using actual big-endian root field values and bounded header hex output.
+- Add Assets > XBX2Unity > Audit CAMDO Header to save a read-only report without importing mesh, also accessible through Tools > XBX2Unity.
+- Include file and CASMT companion sizes to distinguish absent source data from unsupported header layouts.
+- Do not fabricate fallback pointers/geometry for unsupported variants; keep native ScriptedImporter and optional GLB viewer unchanged.
+- CI packaging alone does not verify actual model contents; share the CAMDO audit report for precise follow-on decoder fixes.
+
+
 ## 0.5.1 - 2026-11-02
 - Fix repeated Wii U CAMDO native importer failure: `Unsupported MXMD version: 942080000`.
 - Decode all MXMD v10040 integer metadata (header version, pointers, counts, vertex descriptors and u16 indices) as big-endian, matching xc3_lib's Wii U legacy reader.

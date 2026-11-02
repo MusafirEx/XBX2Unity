@@ -329,6 +329,30 @@ namespace MusafirEx.XBX2Unity.Editor
         {
             return new Vector3(BEFloat(offset), BEFloat(offset + 4), BEFloat(offset + 8));
         }
+        // Safe bounded hexadecimal report; useful when a CAMDO is empty, stripped or
+        // uses an unexpected variant. No geometry decoding is attempted here.
+        public string HeaderAudit()
+        {
+            var result = new System.Text.StringBuilder();
+            result.Append("len=").Append(bytes.Length);
+            result.Append(" first64=");
+            int length = Math.Min(64, bytes.Length);
+            for (int i = 0; i < length; i++)
+            {
+                if (i != 0) result.Append(' ');
+                result.Append(bytes[i].ToString("X2"));
+            }
+            result.Append(" fields=[");
+            for (int p = 4; p < Math.Min(64, bytes.Length) - 3; p += 4)
+            {
+                if (p != 4) result.Append(", ");
+                result.Append("0x").Append(p.ToString("X2")).Append(":0x")
+                    .Append(U32(p).ToString("X8"));
+            }
+            result.Append(']');
+            return result.ToString();
+        }
+
         public float SNorm(int offset) { return Mathf.Max(-1f, unchecked((sbyte)U8(offset)) / 127f); }
         public float UNormSigned(int offset) { return U8(offset) / 127.5f - 1f; }
 
@@ -342,10 +366,21 @@ namespace MusafirEx.XBX2Unity.Editor
                 throw new InvalidDataException("Unsupported MXMD version: " + version +
                     " (0x" + version.ToString("X8") + "; expected Wii U 10040 / 0x00002738).");
 
-            int modelsBase = Relative(0, 8);
-            int vertexBase = Relative(0, 20);
-            if (modelsBase == 0 || vertexBase == 0)
-                throw new InvalidDataException("Missing Models/VertexData root pointers.");
+            // Wii U MXMD's root fields use absolute offsets into the CAMDO file.
+            // The first root-pointer block starts immediately after magic+version.
+            // Do not guess an alternative table location if a mandatory pointer is 0:
+            // that could interpret arbitrary bytes as a valid mesh and crash Unity.
+            uint modelsRaw = U32(0x08);
+            uint vertexRaw = U32(0x14);
+            if (modelsRaw == 0 || vertexRaw == 0)
+                throw new InvalidDataException(
+                    "Missing Models/VertexData root pointers: " +
+                    "Models[0x08]=0x" + modelsRaw.ToString("X8") +
+                    ", VertexData[0x14]=0x" + vertexRaw.ToString("X8") +
+                    ", header=" + HeaderAudit() +
+                    ". Use Assets > XBX2Unity > Audit CAMDO Header and share its report.");
+            int modelsBase = Relative(0, 0x08);
+            int vertexBase = Relative(0, 0x14);
 
             var output = new Document();
 
