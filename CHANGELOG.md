@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 - 2026-11-02
+- Parse MXMD legacy material texture links and map external texture references (cached container / uncached global mapping).
+- Resolve extracted stage PNG/DDS/TGA by exact container/id paths, bind base textures into native Unity Materials, and track imported texture dependencies.
+- Read vertex `vBlend` (attribute type 14) into Mesh.uv3 independently from vertex color.
+- Add opt-in two-layer edge blending preview shader for URP and Built-in, with selectable source slot, vBlend R/G/B/A channel, threshold and transition softness.
+- Add Material Inspector controls and a diagnostic count of bound and unresolved textures.
+- Preserve default single-layer materials; do not claim full original Xenoblade X shader recreation.
+- Include Runtime shader and metadata in UPM and UnityPackage builds.
+
+
 ## 0.5.3 - 2026-11-02
 - Read native map CAMDO **external geometry in the adjacent CASMT**, without GLTF.
 - Recognize `MXMD VertexData[0x14] == 0` with `externalBufferIDs[0x28]` and `count[0x2C]` as a valid stage-extraction layout, rather than an invalid model.

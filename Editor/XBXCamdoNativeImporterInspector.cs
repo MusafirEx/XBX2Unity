@@ -38,7 +38,31 @@ namespace MusafirEx.XBX2Unity.Editor
             else
             {
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("createPlaceholderMaterials"));
-                EditorGUILayout.HelpBox("Materials are flat placeholders grouped by original material index. CASMT stage geometry is decoded, but CASMT textures and Xenoblade shaders are not decoded yet.", MessageType.Warning);
+                EditorGUILayout.Space(4);
+                EditorGUILayout.LabelField("Map Texture Binding", EditorStyles.boldLabel);
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("bindExtractedTextures"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("baseTextureSlot"));
+                EditorGUILayout.HelpBox(
+                    "Automatically resolves material texture indices using MXMD external texture records. " +
+                    "Looks for PNG/DDS/TGA in the extracted map textures/<container>/<id> or textures/<id>. " +
+                    "Slot 0 is a preview default, not a verified Xenoblade diffuse shader slot.",
+                    MessageType.Info);
+                EditorGUILayout.Space(4);
+                EditorGUILayout.LabelField("Experimental Edge Blending (vBlend)", EditorStyles.boldLabel);
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("enableExperimentalEdgeBlend"));
+                if (serializedObject.FindProperty("enableExperimentalEdgeBlend").boolValue)
+                {
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("blendTextureSlot"));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("blendChannel"));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("blendThreshold"));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("blendSoftness"));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("useVertexTint"));
+                    EditorGUILayout.HelpBox(
+                        "Blend is an experimental 2-layer unlit preview using source vertex vBlend (type 14). " +
+                        "The second material texture slot may be a normal/lookup map rather than a diffuse layer. " +
+                        "Check textures before enabling. Original Wii U edge compositing is not reproduced.",
+                        MessageType.Warning);
+                }
             }
             serializedObject.ApplyModifiedProperties();
             ApplyRevertGUI();
