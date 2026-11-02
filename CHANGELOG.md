@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 - 2026-11-02
+- Add CAMDO Model Viewer editor window with single-file and bounded batch conversion to GLB.
+- Use external `xc3_gltf.exe` converter (from ScanMountGoat/xc3_lib) to read extracted Wii U CAMDO/CASMT model pairs.
+- Import generated GLB as a Unity glTFast model asset, optionally instantiate and frame it in the active Scene.
+- Validate GLB v2 header, avoid touching source files, keep logs, and support cancellation.
+- Include the new Editor tool and metadata in both UPM and UnityPackage builds.
+- Explicitly document conversion limitations and required external dependencies.
+
+
 ## 0.3.2 - 2026-11-02
 - Correct CPK extraction command for CRI CPK Tool: `extract_all -p "archive.cpk" -o "output_dir"`.
 - Add explicit syntax selector; retain legacy `"archive.cpk" ALL` support.

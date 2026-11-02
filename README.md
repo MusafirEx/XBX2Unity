@@ -12,6 +12,41 @@ https://github.com/MusafirEx/XBX2Unity.git#feature/unity-map-extractor-package
 
 Alternatively import the `.unitypackage` from the GitHub Actions build artifact.
 
+
+## Preview Wii U CAMDO models directly in Unity (v0.4.0)
+
+This workflow **does not require Blender**. It uses the external [xc3_gltf](https://github.com/ScanMountGoat/xc3_lib/tree/main/xc3_gltf) program to convert Wii U `.camdo` models into a GLB, then lets [Unity glTFast](https://docs.unity3d.com/Packages/com.unity.cloud.gltfast@latest) import it into the Project as a previewable, placeable model. This is a conversion workflow rather than a native binary CAMDO `ScriptedImporter`.
+
+1. Download the Windows `xc3_lib_win_x64.zip` from [xc3_lib releases](https://github.com/ScanMountGoat/xc3_lib/releases). Extract it and locate **xc3_gltf.exe**. Do not choose `casmExtract.exe` or `XenobladeToolset.exe`.
+2. In Unity Package Manager, install **com.unity.cloud.gltfast** if it is not installed. The RTS Unity project already had it installed at version 6.14.1 in the previously inspected manifest.
+3. Extract your `map.cpk` using XBX2Unity CPK Extractor, then extract CASM via XenoToolset to generate files like:
+   ```
+   Assets/XBX/ma9990/terrain/0.camdo
+   Assets/XBX/ma9990/terrain/0.casmt
+   Assets/XBX/ma9990/objects/...
+   Assets/XBX/ma9990/Skybox0.camdo
+   ```
+4. Select a `.camdo` asset in Unity's Project view, choose **Assets > XBX2Unity > Convert and View CAMDO** (or open **Tools > XBX2Unity > CAMDO Model Viewer**).
+5. Browse to `xc3_gltf.exe` and click **Convert Selected & View**. The plugin executes:
+   ```powershell
+   xc3_gltf.exe "C:\\path\\to\\0.camdo" --output "C:\\project\\XBX_Exports\\ModelConversion\\<unique>\\0.glb"
+   ```
+   The `.casmt` companion and internal model data are resolved by the converter based on the CAMDO location.
+6. Upon successful conversion, the tool copies the validated GLB to `Assets/XBX_Imported/XBX/ma9990/terrain/0.glb`. glTFast creates a model asset; the plugin selects/pings it and, if enabled, instantiates it into the active Scene and frames the Scene view.
+
+Selecting a folder such as `Assets/XBX/ma9990/terrain` or `Assets/XBX/ma9990` also works. **Convert Up To 20 Models** converts a bounded batch sequentially to avoid accidentally creating thousands of heavy model assets. The single-file mode is recommended for the first test.
+
+### Model viewing status and limitations
+
+- GLB contains geometry and attributes supported by the **xc3_gltf** converter: vertices, normals, tangents, UVs, vertex colors, skin weights, and available textures/materials. The original game shader appearance may differ.
+- The converter automatically finds the paired `.casmt` where applicable. Some `.camdo` files (such as Skybox or LOD assets) may not have one, and some require additional source data or specific converter versions.
+- The extracted `textures/` tree is not automatically mapped by folder number in XBX2Unity. Conversion uses the source converter's own dependency rules.
+- glTFast's generated `.glb` asset is viewable and can be dragged into a Scene or opened in Prefab/Inspector preview. No direct custom `.camdo` inspector has been implemented yet.
+- This release has not been verified with a real `ma9990` binary via a connected Windows Unity Editor. GitHub packaging CI is **not** an actual model conversion or Unity compilation test.
+- Converter outputs and logs are written under `XBX_Exports/ModelConversion/`, outside Assets; successful GLBs only go under `Assets/XBX_Imported`.
+- The converter executable and game assets are **not distributed** by XBX2Unity. Respect third-party software licenses and game asset copyright.
+
+
 ## Starting with `map.cpk`
 
 1. Select `Assets/XBX/map.cpk` in Unity's Project window.
@@ -35,7 +70,7 @@ For `.casmhd` + `.casmda` extraction, select `casmExtract.exe` from [XenoToolset
 
 ### Important limitations
 
-- There is **no native CPK/CASM/CANV mesh or texture decoder**. Output of CPK extraction is still game data.
+- There is **no native CPK/CASM/CANV mesh or texture decoder**. To view `.camdo` models, use the external xc3_gltf GLB conversion described above.
 - Match the **Tool command syntax** to the executable. The newer tool used in the user's log shows `extract_all -p <cpk_file> -o <output_dir>`, whereas earlier legacy builds accept `<cpk_file> ALL`. The newer tool does not advertise listing.
 - Some CriPakTool versions may fail on archives larger than 2 GiB or other unsupported CPK variations; check the process log.
 - Game archives may contain arbitrary embedded paths; only extract CPK files from trusted personal dumps. Inspect archive contents first. The external tool performs the actual filesystem writes.
