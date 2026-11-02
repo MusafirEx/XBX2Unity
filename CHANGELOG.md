@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0 - 2026-11-02
+- Begin Skell texture phase after user confirmed native skin deformation on two v0.7.2 models.
+- Add opt-in GX2 MTXT reader: read referenced packed CAMDO textures and streaming CASMT low/high descriptor tables with their material IDs.
+- Deswizzle the base mip for BC1 and BC5 in GX2 tile modes 2/4, preserving source native DXT1/BC5 compression in Unity Texture2D subassets.
+- Bind source MXMD material texture indices to generated textures when available; keep map PNG logic separate.
+- Add Inspector controls for native Skell textures and resource caps, diagnostics, and safe fallback for unsupported MTXT formats.
+- ScriptedImporter revision 7; no changes to v0.7.2 skinning.
+- Unity import, color semantics, high-res mapping and shader fidelity remain unverified until local test. CI validates packaging only.
+
+
 ## 0.7.2 - 2026-11-02
 - Fix Skell native skinning selector mismatch identified from actual Unity Editor.log: dl019100 had 1 SkinnedMeshRenderer + 53 static fallbacks; dl019600 had 2 + 29.
 - Root cause: v0.7.1 incorrectly treated legacy weight header selector values as absolute indices that must be present in the list of weight buffers. The actual legacy xc3_model implementation subtracts firstWeightBuffer, and when selector is before that start, uses the first weight buffer (ordinal zero).

@@ -44,6 +44,24 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell native MTXT texture preview (v0.8.0)
+
+The user tested Skell bone deformation on two models and confirmed the v0.7.2 hierarchy, weight remapping and SkinnedMeshRenderer work. The new work begins the **Texture phase** while preserving rig and weight behavior.
+
+**Experimental and opt-in:** select a `.camdo` model such as `dl019100.camdo`, open Inspector **Material** tab, check **Import Skell MTXT Textures**, keep **Base Texture Slot = 0** initially, and click Apply/Reimport. The importer:
+- Parses Wii U big-endian **MXMD packed textures** at root offset `0x1C` in the CAMDO.
+- Parses optional **MXMD Streaming** at `0x24`, including low/high CASMT texture descriptor tables, material texture indices, and high-res-to-low-res mapping. High-res texture replaces low-res when present.
+- Reads **MTXT** GX2 surface footer from each referenced texture payload (112 bytes) and uses its format, dimensions, pitch, swizzle, and tile mode.
+- Supports **BC1 (format 49)** and **BC5 (format 53)** first mip only, **GX2 tile 2/4**. Reorders compressed 4x4 blocks with Wii U 2-pipe/4-bank 256-byte-interleave address math and creates Unity `TextureFormat.DXT1` or `TextureFormat.BC5` subassets.
+- Binds generated textures into each material via its **MXMD texture index** at the chosen base material slot, rather than filename guessing. The Inspector `Max Skell Textures` setting defaults to 96 and bounds memory use.
+- Leaves unsupported formats (BC2/3/4, RGBA8, unusual tiling, multi-layer, cube and mip tails) unbound. The original game's shader stage/semantic role of each material slot is not reconstructed.
+
+The imported root will contain `mtxt_0000`, etc., Texture2D subassets. The Unity Console logs `Skell Decoded MTXT base textures=N` and `native Skell material textures=N`. **These numbers do not prove that color/normal material roles are correct.** If base slot 0 is BC5 normal data, inspect another texture slot; do not use BC5 as a color/albedo layer. The decoder preserves existing imported Mesh, SkinnedMeshRenderer and bone hierarchy if texture parsing fails.
+
+The user's existing Skell resource audit found **15 MTXT footer candidates in CAMDO and 30 in CASMT** for `dl019100` (BC1/BC5 tile modes 2/4). This release now uses **referenced** MTXT records rather than scanning for image bytes and assigning by order. The results still need to be tested in Unity; GitHub CI only packages scripts.
+
+References: [xc3_lib MTXT](https://github.com/ScanMountGoat/xc3_lib/blob/main/xc3_lib/src/mtxt.rs), [legacy MXMD](https://github.com/ScanMountGoat/xc3_lib/blob/main/xc3_lib/src/mxmd/legacy.rs), [msrd streaming](https://github.com/ScanMountGoat/xc3_lib/blob/main/xc3_lib/src/msrd.rs), [wiiu_swizzle addrlib](https://github.com/ScanMountGoat/wiiu_swizzle/blob/main/src/addrlib.rs).
+
 ## Skell weight buffer selector fix (v0.7.2)
 
 Actual Unity `Editor.log` after enabling **Rig > Import Skell Bone Weights** on v0.7.1 showed:
