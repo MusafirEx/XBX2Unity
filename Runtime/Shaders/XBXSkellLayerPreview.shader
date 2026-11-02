@@ -16,9 +16,17 @@ Shader "XBX2Unity/Skell Layer Preview"
         _SpecularStrength ("Specular Detail Preview", Range(0,2)) = 0.5
         _UseNormalMap ("Has Normal Candidate", Float) = 0
         _UseSpecularMap ("Has Specular Candidate", Float) = 0
-        _UsePaintMask ("Interpret RGB as Mask (experimental)", Float) = 0
+        _UsePaintMask ("Legacy 4-zone RGBA experiment (unverified)", Float) = 0
+        _UseObservedGreenBody ("Use observed G for body tint", Float) = 0
+        _BodyPaintColor ("Body Color (G mask)", Color) = (1,1,1,1)
+        _BodyMaskStrength ("Body Tint Strength", Range(0,1)) = 1
+        _BodyMaskGain ("Green Mask Gain", Range(0.1,8)) = 1
+        _UseObservedBlueGlow ("Use observed B for glow", Float) = 0
+        [HDR] _GlowColor ("Glow Color (B mask)", Color) = (0.2,0.6,1,1)
+        _GlowIntensity ("Glow Intensity (preview)", Range(0,8)) = 1
+        _GlowMaskGain ("Blue Mask Gain", Range(0.1,8)) = 1
         _UseVertexColor ("Use Source Vertex Color", Float) = 0
-        _ViewMode ("Source View: Composite/Base/Normal/SPM/RGB/Channel/Threshold/Vertex/Dominance/Difference/Alpha", Range(0,10)) = 0
+        _ViewMode ("Source View: Composite, base, normal, SPM, RGB, channels, body G, glow B", Range(0,13)) = 0
         _MaskChannel ("RGB Candidate Channel (0=R,1=G,2=B,3=A)", Range(0,3)) = 0
     }
     CGINCLUDE
@@ -33,6 +41,10 @@ Shader "XBX2Unity/Skell Layer Preview"
     float _PaintStrength, _NormalStrength, _SpecularStrength;
     float _UseNormalMap, _UseSpecularMap, _UsePaintMask;
     float _UseVertexColor, _ViewMode, _MaskChannel;
+    float _UseObservedGreenBody, _BodyMaskStrength, _BodyMaskGain;
+    float4 _BodyPaintColor;
+    float _UseObservedBlueGlow, _GlowIntensity, _GlowMaskGain;
+    float4 _GlowColor;
 
     struct appdata_xbx
     {
@@ -54,7 +66,7 @@ Shader "XBX2Unity/Skell Layer Preview"
         o.vertexColor = v.color;
         return o;
     }
-    fixed4 frag_xbx(v2f_xbx i) : SV_Target
+    float4 frag_xbx(v2f_xbx i) : SV_Target
     {
         fixed4 primary = tex2D(_MainTex, i.uv);
         fixed4 normalEncoded = tex2D(_BumpMap, i.uv);
@@ -92,13 +104,26 @@ Shader "XBX2Unity/Skell Layer Preview"
         }
         if (_ViewMode > 8.5 && _ViewMode < 9.5)
             return fixed4(abs(primary.rgb-maskCandidate.rgb),1);
-        if (_ViewMode > 9.5)
+        if (_ViewMode > 9.5 && _ViewMode < 10.5)
             return fixed4(maskCandidate.a,maskCandidate.a,maskCandidate.a,1);
+        // Observed in-game on dl099110: G corresponds to Skell body,
+        // B corresponds to luminous features. These mask previews do NOT
+        // modify the actual generated material colors.
+        float bodyCoverage = saturate(maskCandidate.g * _BodyMaskGain);
+        float glowCoverage = saturate(maskCandidate.b * _GlowMaskGain);
+        if (_ViewMode > 10.5 && _ViewMode < 11.5)
+            return float4(maskCandidate.g,maskCandidate.g,maskCandidate.g,1);
+        if (_ViewMode > 11.5 && _ViewMode < 12.5)
+            return float4(maskCandidate.b,maskCandidate.b,maskCandidate.b,1);
+        if (_ViewMode > 12.5)
+            return float4(0,maskCandidate.g,maskCandidate.b,1);
 
-        fixed4 resultColor = primary * _Color;
+        float4 resultColor = primary * _Color;
         if (_UseVertexColor > 0.5)
             resultColor *= i.vertexColor;
-        if (_UsePaintMask > 0.5 && _PaintStrength > 0.001)
+        if (_UsePaintMask > 0.5 &&
+            _UseObservedGreenBody < 0.5 && _UseObservedBlueGlow < 0.5 &&
+            _PaintStrength > 0.001)
         {
             // A deliberately EXPLICIT experiment: this assumes RGBA can
             // represent four paint zones, which is NOT yet confirmed.
@@ -112,6 +137,11 @@ Shader "XBX2Unity/Skell Layer Preview"
                 resultColor.rgb * zoneTint * 1.5,
                 saturate(total) * _PaintStrength);
         }
+        // Source-observed channel mapping is independent of the abandoned
+        // assumption that RGBA holds four smooth paint zones.
+        if (_UseObservedGreenBody > 0.5)
+            resultColor.rgb *= lerp(float3(1,1,1), _BodyPaintColor.rgb,
+                bodyCoverage * saturate(_BodyMaskStrength));
         if (_UseNormalMap > 0.5)
         {
             float detail = saturate(dot(
@@ -121,6 +151,11 @@ Shader "XBX2Unity/Skell Layer Preview"
         }
         if (_UseSpecularMap > 0.5)
             resultColor.rgb += specEncoded.rgb * _SpecularStrength * 0.15;
+        // Unlit approximate emission: a visible bright channel overlay,
+        // NOT authentic Xenoblade lighting and not guaranteed bloom.
+        if (_UseObservedBlueGlow > 0.5)
+            resultColor.rgb += _GlowColor.rgb * glowCoverage *
+                max(_GlowIntensity, 0.0);
         resultColor.a = 1;
         return resultColor;
     }

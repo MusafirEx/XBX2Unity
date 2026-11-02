@@ -1,8 +1,8 @@
 {
   "name": "com.musafirex.xbx2unity",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "displayName": "XBX2Unity - Xenoblade X Wii U Native CAMDO Tools",
-  "description": "XBX2Unity native CAMDO/CASMT/HKT importer with persistent materials and sampled BC1 Skell RGB companion channel audit.",
+  "description": "XBX2Unity native Skell MXMD/GX2 importer, HKT rig and source-linked material editing, G-body and B-glow layer preview from game observation.",
   "unity": "2022.3",
   "keywords": [
     "xenoblade",

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.3 - 2026-11-03
+- From direct in-game comparison of dl099110, the user identified the *Green* channel in *_RGB companion as the **Skell body mask**, and *Blue* as the **glowing/luminous parts mask**. Red is **still unidentified**. This observation does not prove global consistency across every Skell.
+- Add independent opt-in Green -> Body Color Tint and Blue -> Glow Emission Preview controls. Both default OFF; body defaults white with adjustable coverage/gain and glow defaults light blue with adjustable intensity/gain.
+- The XBX Skell Layer Preview shader uses source G only for body tint and source B only for additive emission. Existing legacy four-zone RGBA experiment remains available but is explicitly bypassed when either user-observed role is active. No assumptions are made about Red or BC1 alpha as extra editable paint zones.
+- Add raw G (body), raw B (glow), and G/B false-color overlay views to the existing 11 preview modes. Source *_RGB is still bound for read-only viewing without enabling either effect.
+- MXMD material indices, BC1/BC5 deswizzle, normal/SPM maps, external .mat overrides and HKT skinning remain unchanged. New controls only affect generated Skell Layer Preview materials; existing extracted .mat assets are not edited.
+- Shader uses unlit additive glow to visualize the candidate mask; true light emission, HDR bloom and the game's shader effects are NOT reproduced.
+- ScriptedImporter revision 14, package v0.9.3, new source-role regression in CI. GitHub Actions cannot compile the Unity C#/HLSL shader.
+
+
 ## 0.9.2 - 2026-11-03
 - Add evidence-based Skell paint-mask forensic workflow, not an assumed native shader. Unity dl099110 logs show 28 decoded MTXT images, 6 RGB companion material links and 60 vertex-color buffers; this does NOT prove paint-zone/channel mapping.
 - Sample deswizzled BC1 DXT1 RGB/A channels before the CPU-readable texture data are discarded. Retain min/mean/max and near-zero/near-one fractions and chroma percentage in original MXMD material manifest for each referenced BC1 texture. Sampling is capped at roughly 16K pixels per texture.

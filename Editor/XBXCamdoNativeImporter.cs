@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(13, "camdo")]
+    [ScriptedImporter(14, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -64,7 +64,19 @@ namespace MusafirEx.XBX2Unity.Editor
         public Color skellPaintColor2 = Color.white;
         public Color skellPaintColor3 = Color.white;
         public Color skellPaintColor4 = Color.white;
-        [Range(0, 10)] public int skellLayerDebugView = 0;
+        [Range(0, 13)] public int skellLayerDebugView = 0;
+
+        [Header("Observed Skell RGB Channels - dl099110")]
+        [Tooltip("Observed in the game on dl099110: the _RGB Green channel marks the body. Tint only the generated layer preview, no external .mat changes.")]
+        public bool skellUseObservedGreenBody = false;
+        public Color skellBodyColor = Color.white;
+        [Range(0f, 1f)] public float skellBodyStrength = 1f;
+        [Range(0.1f, 8f)] public float skellBodyMaskGain = 1f;
+        [Tooltip("Observed in the game on dl099110: _RGB Blue channel marks glowing parts. This unlit shader gives an additive preview, not native light/bloom.")]
+        public bool skellUseObservedBlueGlow = false;
+        [ColorUsage(true, true)] public Color skellGlowColor = new Color(0.2f, 0.6f, 1f, 1f);
+        [Range(0f, 8f)] public float skellGlowIntensity = 1f;
+        [Range(0.1f, 8f)] public float skellGlowMaskGain = 1f;
         [Tooltip("Diagnostic selected _RGB channel: 0=Red, 1=Green, 2=Blue, 3=Alpha; no paint applied.")]
         [Range(0, 3)] public int skellMaskChannel = 0;
         [Header("Extracted Map Textures")]
@@ -524,6 +536,27 @@ namespace MusafirEx.XBX2Unity.Editor
                                         if (mat.HasProperty("_UsePaintMask"))
                                             mat.SetFloat("_UsePaintMask", hasCandidate &&
                                                 skellUseRgbCompanionAsPaintMask ? 1f : 0f);
+                                        // On dl099110 the source _RGB G marks body, B
+                                        // marks glow. Not globally proven for all Skells.
+                                        // Keep preview opt-in and never edit external .mat.
+                                        if (mat.HasProperty("_UseObservedGreenBody"))
+                                            mat.SetFloat("_UseObservedGreenBody",
+                                                hasCandidate && skellUseObservedGreenBody ? 1f : 0f);
+                                        if (mat.HasProperty("_UseObservedBlueGlow"))
+                                            mat.SetFloat("_UseObservedBlueGlow",
+                                                hasCandidate && skellUseObservedBlueGlow ? 1f : 0f);
+                                        if (mat.HasProperty("_BodyPaintColor"))
+                                            mat.SetColor("_BodyPaintColor", skellBodyColor);
+                                        if (mat.HasProperty("_BodyMaskStrength"))
+                                            mat.SetFloat("_BodyMaskStrength", skellBodyStrength);
+                                        if (mat.HasProperty("_BodyMaskGain"))
+                                            mat.SetFloat("_BodyMaskGain", skellBodyMaskGain);
+                                        if (mat.HasProperty("_GlowColor"))
+                                            mat.SetColor("_GlowColor", skellGlowColor);
+                                        if (mat.HasProperty("_GlowIntensity"))
+                                            mat.SetFloat("_GlowIntensity", skellGlowIntensity);
+                                        if (mat.HasProperty("_GlowMaskGain"))
+                                            mat.SetFloat("_GlowMaskGain", skellGlowMaskGain);
                                     }
                                     if (selected == null) unmatchedSkellMaterials++;
                                     if (materialId >= 0 && materialId < manifest.entries.Count)
