@@ -38,7 +38,7 @@ namespace MusafirEx.XBX2Unity.Editor
             else
             {
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("createPlaceholderMaterials"));
-                EditorGUILayout.HelpBox("Materials are flat placeholders grouped by original material index. CASMT textures and Xenoblade shaders are not decoded yet.", MessageType.Warning);
+                EditorGUILayout.HelpBox("Materials are flat placeholders grouped by original material index. CASMT stage geometry is decoded, but CASMT textures and Xenoblade shaders are not decoded yet.", MessageType.Warning);
             }
             serializedObject.ApplyModifiedProperties();
             ApplyRevertGUI();

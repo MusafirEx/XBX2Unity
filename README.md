@@ -19,6 +19,22 @@ The first native importer in v0.5.0 incorrectly decoded MXMD metadata as little-
 
 After upgrading the package, right-click `Assets/XBX/ma9990/terrain/0.camdo` and select **Reimport**. If a later geometry parsing issue appears, copy its exact error and a small sample file for focused binary debugging. Packaging CI does not compile or run Unity Editor.
 
+
+### Native map CAMDO/CASMT geometry support (v0.5.3)
+
+The user's `terrain/0.camdo` header is **not broken**: it has `Models[0x08] = 0x44`, `VertexData[0x14] = 0`, `ExternalBufferIDs[0x28] = 0xE64` and `ExternalBufferCount[0x2C] = 0xFFFFFFFF`. This is the map-extracted CAMDO layout produced by [PredatorCZ/XenoToolset `casmExtract`](https://github.com/PredatorCZ/XenoToolset/blob/master/casmExtract/casmExtract.cpp). That extractor deliberately uses no internal vertex pointer for map terrain and writes the actual geometry into the adjacent `.casmt` file.
+
+The native importer now detects this stage layout and **reads geometry directly from the adjacent `.casmt`**, without converting to glTF/GLB:
+
+- **Terrain**: `0x2C = FFFFFFFF` selects `MXMDTerrainBufferLookupHeader_V1`: group indices → pair index and side → geometry-offset inside `.casmt`.
+- **Objects**: positive `0x2C` selects a flat array of geometry offsets into `.casmt`.
+- **Standalone models**: nonzero internal vertex pointer `0x14` continues through the embedded mesh-buffer path.
+- Each geometry header contains vertex/index buffer descriptors, attribute descriptors and big-endian Wii U vertex/index data; Unity generates Mesh, Material placeholders and GameObjects.
+- Both `.camdo` and `.casmt` must remain alongside each other. External geometry reads are currently limited to **512 MiB per CASMT file** to prevent extreme Editor memory usage; streaming/incremental reads can replace this limit later.
+- Textures/shader material mapping, terrain instances, rigs/animations and map placement remain future work.
+
+**Test one small pair first**: update the package from `main`, select `Assets/XBX/ma9990/terrain/0.camdo`, right-click → Reimport and inspect the Mesh sub-assets. There may still be format variations requiring fixes because local raw `.camdo/.casmt` data has not been run through the newly implemented parser, and GitHub Actions packaging is not a Unity import test.
+
 ### CAMDO binary header audit (v0.5.2)
 
 If Unity displays `Missing Models/VertexData root pointers`, the source file passed the `MXMD 10040` header check but at least one expected root field is null. Do not force offset guesses.
@@ -38,7 +54,7 @@ XBX2Unity now includes **XBXCamdoNativeImporter**, a pure C# Unity 2022.3 `Scrip
 - Reads normal and tangent bytes, optional vertex color, 16-bit triangle indices, mesh draw/material references.
 - Builds `MeshFilter`, `MeshRenderer`, `Mesh`, and placeholder `Material` Unity sub-assets.
 - Preserves shared mesh data for repeated vertex/index buffer references; optional X mirror and triangle winding adjustment.
-- Companion `.casmt` path is tracked as an asset import dependency where present. **CASMT texture decoding is not implemented**.
+- Companion `.casmt` path is tracked as an asset import dependency where present. **CASMT geometry decoding is implemented for map terrain and objects as of v0.5.3; texture decoding is not implemented**.
 - Inspector tabs: **Model** (working static-mesh options), **Rig** (not yet supported), **Animation** (not yet supported), **Material** (placeholder settings only).
 - Bounded, validated pointers and file/model/mesh/index counts. Invalid/unsupported content reports a Unity import error rather than inventing geometry.
 - Retains the separate **CAMDO Model Viewer** GLB-based tool from v0.4.0 as an optional fallback for unsupported native import cases.

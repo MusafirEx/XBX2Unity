@@ -95,7 +95,22 @@ namespace MusafirEx.XBX2Unity.Editor
                 }
 
                 report.AppendLine();
+                if (read >= 0x30)
+                {
+                    uint externalOffset = BigEndian32(header, 0x28);
+                    uint marker = BigEndian32(header, 0x2C);
+                    if (BigEndian32(header, 0x14) == 0 && externalOffset != 0)
+                    {
+                        report.AppendLine("Stage CAMDO: external geometry is in the adjacent CASMT.");
+                        report.AppendLine("External geometry table offset: 0x" + externalOffset.ToString("X8"));
+                        report.AppendLine("External buffer mode: " +
+                            (marker == 0xFFFFFFFFu ? "terrain pair/group lookups (FFFFFFFF)" :
+                                marker + " object geometry table entries"));
+                    }
+                }
+                report.AppendLine();
                 report.AppendLine("Reference: ScanMountGoat/xc3_lib, xc3_lib/src/mxmd/legacy.rs");
+                report.AppendLine("Map export reference: PredatorCZ/XenoToolset/casmExtract");
                 report.AppendLine("No mesh, texture, or model data was modified.");
                 string reportFolder = Path.Combine(root, "XBX_Exports", "CAMDO_Audits");
                 Directory.CreateDirectory(reportFolder);

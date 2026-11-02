@@ -42,7 +42,7 @@ namespace MusafirEx.XBX2Unity.Editor
                 // first native geometry importer deliberately does not parse.
                 var bytes = File.ReadAllBytes(ctx.assetPath);
                 var reader = new LegacyCamdoReader(bytes);
-                var document = reader.Parse();
+                var document = reader.Parse(File.Exists(companion) ? companion : null);
 
                 Dictionary<int, Material> materials = new Dictionary<int, Material>();
                 var geometryCache = new Dictionary<long, Mesh>();
@@ -62,22 +62,26 @@ namespace MusafirEx.XBX2Unity.Editor
                         }
 
                         var draw = sourceModel.meshes[drawIndex];
-                        if (draw.vertexBufferIndex >= document.vertices.Count ||
-                            draw.indexBufferIndex >= document.indices.Count)
+                        if (sourceModel.geometry == null ||
+                            draw.vertexBufferIndex >= sourceModel.geometry.vertices.Count ||
+                            draw.indexBufferIndex >= sourceModel.geometry.indices.Count)
                         {
                             ctx.LogImportWarning("Invalid buffer index in model " + modelIndex + ", mesh " + drawIndex);
                             continue;
                         }
 
                         // Reuse geometry if multiple draw calls select the same raw buffers.
-                        long key = ((long)draw.vertexBufferIndex << 32) | (uint)draw.indexBufferIndex;
+                        long key = ((long)modelIndex << 40) |
+                            ((long)draw.vertexBufferIndex << 20) | (uint)draw.indexBufferIndex;
                         Mesh mesh;
                         if (!geometryCache.TryGetValue(key, out mesh))
                         {
                             try
                             {
-                                mesh = BuildMesh(reader, document.vertices[(int)draw.vertexBufferIndex],
-                                    document.indices[(int)draw.indexBufferIndex], "mesh_v" + draw.vertexBufferIndex + "_i" + draw.indexBufferIndex);
+                                mesh = BuildMesh(sourceModel.geometry.reader,
+                                    sourceModel.geometry.vertices[(int)draw.vertexBufferIndex],
+                                    sourceModel.geometry.indices[(int)draw.indexBufferIndex],
+                                    "mesh_g" + modelIndex + "_v" + draw.vertexBufferIndex + "_i" + draw.indexBufferIndex);
                                 geometryCache.Add(key, mesh);
                                 ctx.AddObjectToAsset("mesh_" + geometryCache.Count.ToString("D5"), mesh);
                             }
@@ -118,14 +122,14 @@ namespace MusafirEx.XBX2Unity.Editor
 
                 if (imported == 0)
                 {
-                    ctx.LogImportWarning("CAMDO parsed but no supported triangle meshes were found. " +
-                        "Check the source format and use the legacy GLB viewer if needed.");
+                    ctx.LogImportWarning("CAMDO model metadata parsed but no supported triangle meshes were imported. " +
+                        "Check CAMDO/CASMT buffer lookup indices and the native importer warnings.");
                 }
                 else
                 {
                     ctx.LogImportWarning("Native geometry preview: " + imported + " draw calls, " +
-                        geometryCache.Count + " unique meshes. Materials are placeholders; " +
-                        "CASMT textures, rigs and animation are not decoded by this release.");
+                        geometryCache.Count + " unique meshes. Supports CASMT external geometry for " +
+                        "casmExtract map terrain/objects. Textures/materials, rigs and animation remain incomplete.");
                 }
             }
             catch (Exception e)
@@ -256,23 +260,29 @@ namespace MusafirEx.XBX2Unity.Editor
         {
             public uint vertexBufferIndex, indexBufferIndex, materialIndex;
         }
+        public sealed class Geometry
+        {
+            public LegacyCamdoReader reader;
+            public List<VertexBuffer> vertices = new List<VertexBuffer>();
+            public List<IndexBuffer> indices = new List<IndexBuffer>();
+        }
         public sealed class Model
         {
             public List<Draw> meshes = new List<Draw>();
+            public Geometry geometry;
         }
         public sealed class Document
         {
             public List<Model> models = new List<Model>();
-            public List<VertexBuffer> vertices = new List<VertexBuffer>();
-            public List<IndexBuffer> indices = new List<IndexBuffer>();
         }
 
         private readonly byte[] bytes;
-        public LegacyCamdoReader(byte[] data)
+        public LegacyCamdoReader(byte[] data, bool isExternal = false)
         {
             bytes = data ?? throw new ArgumentNullException(nameof(data));
-            if (bytes.Length < 40 || bytes.Length > 512L * 1024 * 1024)
-                throw new InvalidDataException("CAMDO source outside supported size limit (40 B–512 MiB).");
+            if (bytes.Length < (isExternal ? 48 : 68) || bytes.Length > 512L * 1024 * 1024)
+                throw new InvalidDataException((isExternal ? "CASMT" : "CAMDO") +
+                    " source outside supported geometry read size (48/68 B–512 MiB).");
         }
 
         private void Range(long start, long count)
@@ -356,7 +366,7 @@ namespace MusafirEx.XBX2Unity.Editor
         public float SNorm(int offset) { return Mathf.Max(-1f, unchecked((sbyte)U8(offset)) / 127f); }
         public float UNormSigned(int offset) { return U8(offset) / 127.5f - 1f; }
 
-        public Document Parse()
+        public Document Parse(string externalPath)
         {
             if (U8(0) != (byte)'M' || U8(1) != (byte)'X' ||
                 U8(2) != (byte)'M' || U8(3) != (byte)'D')
@@ -364,40 +374,31 @@ namespace MusafirEx.XBX2Unity.Editor
             uint version = U32(4);
             if (version != 10040)
                 throw new InvalidDataException("Unsupported MXMD version: " + version +
-                    " (0x" + version.ToString("X8") + "; expected Wii U 10040 / 0x00002738).");
+                    " (expected Wii U big-endian 10040).");
 
-            // Wii U MXMD's root fields use absolute offsets into the CAMDO file.
-            // The first root-pointer block starts immediately after magic+version.
-            // Do not guess an alternative table location if a mandatory pointer is 0:
-            // that could interpret arbitrary bytes as a valid mesh and crash Unity.
             uint modelsRaw = U32(0x08);
             uint vertexRaw = U32(0x14);
-            if (modelsRaw == 0 || vertexRaw == 0)
-                throw new InvalidDataException(
-                    "Missing Models/VertexData root pointers: " +
-                    "Models[0x08]=0x" + modelsRaw.ToString("X8") +
-                    ", VertexData[0x14]=0x" + vertexRaw.ToString("X8") +
-                    ", header=" + HeaderAudit() +
-                    ". Use Assets > XBX2Unity > Audit CAMDO Header and share its report.");
+            uint externalIdsRaw = U32(0x28);
+            int externalIdsCount = unchecked((int)U32(0x2C));
+            if (modelsRaw == 0)
+                throw new InvalidDataException("Missing Models root pointer at 0x08; " + HeaderAudit());
             int modelsBase = Relative(0, 0x08);
-            int vertexBase = Relative(0, 0x14);
-
             var output = new Document();
 
-            // Models starts with 6 float AABB values; then relative pointer/count.
+            // MXMD::V1::Model has 24 bytes of bounds followed by a
+            // base-relative model/mesh-group offset+count at +0x18.
             int modelArray = Relative(modelsBase, checked(modelsBase + 24));
-            int modelCount = Count(checked(modelsBase + 28), 10000, "model");
+            int modelCount = Count(modelsBase + 28, 10000, "model");
             if (modelCount > 0 && modelArray == 0)
                 throw new InvalidDataException("Nonzero model count has null pointer.");
             Range(modelArray, (long)modelCount * 68L);
             for (int modelIndex = 0; modelIndex < modelCount; modelIndex++)
             {
-                // Model struct is 68 bytes; mesh array offsets are relative to Models base.
                 int modelPos = checked(modelArray + modelIndex * 68);
                 int meshArray = Relative(modelsBase, modelPos);
                 int meshCount = Count(modelPos + 4, 20000, "mesh");
                 if (meshCount > 0 && meshArray == 0)
-                    throw new InvalidDataException("Mesh array pointer is null.");
+                    throw new InvalidDataException("Mesh array pointer is null for group " + modelIndex);
                 Range(meshArray, (long)meshCount * 64L);
                 var model = new Model();
                 for (int draw = 0; draw < meshCount; draw++)
@@ -413,56 +414,153 @@ namespace MusafirEx.XBX2Unity.Editor
                 output.models.Add(model);
             }
 
-            // VertexData: vertex buffer offset/count; index buffer offset/count.
+            if (vertexRaw != 0)
+            {
+                // Character/Skybox CAMDO: geometry embedded in the CAMDO.
+                var internalGeometry = ParseGeometry(Relative(0, 0x14));
+                foreach (var model in output.models) model.geometry = internalGeometry;
+                return output;
+            }
+
+            // IMPORTANT: Map CAMDO from casmExtract intentionally has a zero
+            // embedded vertex pointer. External buffer lookup is 0x28 and
+            // count/format sentinel 0x2c; geometry lives in companion CASMT.
+            // See XenoToolset/casmExtract and XenoLib/obsolete/MXMD.cpp.
+            if (externalIdsRaw == 0)
+                throw new InvalidDataException("No embedded or external geometry pointer. " +
+                    "VertexData[0x14]=0, ExternalBufferIDs[0x28]=0; " + HeaderAudit());
+            if (string.IsNullOrEmpty(externalPath) || !File.Exists(externalPath))
+                throw new FileNotFoundException("Map CAMDO uses external geometry. " +
+                    "The corresponding .casmt file must be next to the .camdo file.", externalPath);
+
+            long length = new FileInfo(externalPath).Length;
+            if (length < 48 || length > 512L * 1024 * 1024)
+                throw new InvalidDataException("External CASMT geometry size " + length +
+                    " exceeds the current 512 MiB in-memory import limit. " +
+                    "This importer does not fabricate a missing vertex buffer.");
+            var externalReader = new LegacyCamdoReader(File.ReadAllBytes(externalPath), true);
+            int table = Relative(0, 0x28);
+            var cache = new Dictionary<int, Geometry>();
+
+            if (externalIdsCount == -1)
+            {
+                // Terrain: header [lookups offset,count, groupIDs offset,count,
+                // unknown, six unused fields]. Each lookup has 6 floats,
+                // two CASMT buffer offsets and 1 unknown = 36 bytes.
+                Range(table, 44);
+                int lookupOffset = Relative(table, table);
+                int lookupCount = Count(table + 4, 50000, "terrain buffer pairs");
+                int groupOffset = Relative(table, table + 8);
+                int groupCount = Count(table + 12, 50000, "terrain group indices");
+                Range(lookupOffset, (long)lookupCount * 36);
+                Range(groupOffset, (long)groupCount * 2);
+                if (groupCount < modelCount)
+                    throw new InvalidDataException("Terrain buffer group indices (" + groupCount +
+                        ") fewer than model groups (" + modelCount + ").");
+
+                for (int i = 0; i < modelCount; i++)
+                {
+                    int groupId = U16(groupOffset + i * 2);
+                    if (lookupCount == 0 || groupId >= lookupCount * 2)
+                        throw new InvalidDataException("Terrain group " + i +
+                            " has invalid external geometry ID " + groupId +
+                            " for " + lookupCount + " pairs.");
+                    int pairId = groupId % lookupCount;
+                    int side = groupId / lookupCount;
+                    int pairAddr = checked(lookupOffset + pairId * 36 + 24 + side * 4);
+                    int geometryOffset = SafeInt(U32(pairAddr), "terrain CASMT offset");
+                    if (!cache.TryGetValue(geometryOffset, out var geometry))
+                    {
+                        geometry = externalReader.ParseGeometry(geometryOffset);
+                        cache.Add(geometryOffset, geometry);
+                    }
+                    output.models[i].geometry = geometry;
+                }
+            }
+            else if (externalIdsCount > 0 && externalIdsCount <= 50000)
+            {
+                // Objects: flat table of CASMT offsets, one per group.
+                Range(table, (long)externalIdsCount * 4);
+                if (externalIdsCount < modelCount)
+                    throw new InvalidDataException("External object geometry count " +
+                        externalIdsCount + " < model groups " + modelCount);
+                for (int i = 0; i < modelCount; i++)
+                {
+                    int geometryOffset = SafeInt(U32(table + i * 4), "object CASMT offset");
+                    if (!cache.TryGetValue(geometryOffset, out var geometry))
+                    {
+                        geometry = externalReader.ParseGeometry(geometryOffset);
+                        cache.Add(geometryOffset, geometry);
+                    }
+                    output.models[i].geometry = geometry;
+                }
+            }
+            else
+            {
+                throw new InvalidDataException("Unsupported external geometry index format: " +
+                    externalIdsCount + " at 0x2C (expected terrain -1 or object count >0).");
+            }
+
+            return output;
+        }
+
+        private Geometry ParseGeometry(int vertexBase)
+        {
+            // MXMDGeometryHeader_V1 holds two base-relative arrays:
+            // 24-byte VertexBufferDescriptor and 12-byte IndexBufferDescriptor.
+            // The base is the geometry header, which may start inside CASMT.
+            Range(vertexBase, 48);
             int vertexArray = Relative(vertexBase, vertexBase);
             int vertexCount = Count(vertexBase + 4, 30000, "vertex buffers");
             int indexArray = Relative(vertexBase, vertexBase + 8);
             int indexCount = Count(vertexBase + 12, 30000, "index buffers");
-            if (vertexCount > 0 && vertexArray == 0 || indexCount > 0 && indexArray == 0)
-                throw new InvalidDataException("Nonzero vertex/index buffer list has null pointer.");
-            Range(vertexArray, (long)vertexCount * 24L);
-            Range(indexArray, (long)indexCount * 12L);
+            if ((vertexCount > 0 && vertexArray == 0) ||
+                (indexCount > 0 && indexArray == 0))
+                throw new InvalidDataException("Nonzero vertex/index buffer count has null pointer.");
+            Range(vertexArray, (long)vertexCount * 24);
+            Range(indexArray, (long)indexCount * 12);
+            var result = new Geometry { reader = this };
 
             for (int i = 0; i < vertexCount; i++)
             {
-                int pos = checked(vertexArray + i * 24);
-                int data = Relative(vertexBase, pos);
-                int count = Count(pos + 4, 2000000, "vertices");
-                int stride = Count(pos + 8, 1024, "vertex stride");
-                int attrArray = Relative(vertexBase, pos + 12);
-                int attrCount = Count(pos + 16, 256, "attributes");
+                int p = checked(vertexArray + i * 24);
+                int data = Relative(vertexBase, p);
+                int count = Count(p + 4, 2000000, "vertices");
+                int stride = Count(p + 8, 1024, "vertex stride");
+                int attrArray = Relative(vertexBase, p + 12);
+                int attrCount = Count(p + 16, 256, "attributes");
                 if (count > 0 && (data == 0 || stride == 0))
                     throw new InvalidDataException("Nonempty vertex buffer with missing data/stride.");
                 if (attrCount > 0 && attrArray == 0)
-                    throw new InvalidDataException("Nonempty attribute list with null pointer.");
+                    throw new InvalidDataException("Nonempty vertex descriptors with null pointer.");
                 Range(data, (long)count * stride);
-                Range(attrArray, (long)attrCount * 4L);
-                var buffer = new VertexBuffer { dataOffset = data, count = count, stride = stride };
+                Range(attrArray, (long)attrCount * 4);
+                var vb = new VertexBuffer { dataOffset = data, count = count, stride = stride };
                 int attrOffset = 0;
                 for (int j = 0; j < attrCount; j++)
                 {
-                    int a = checked(attrArray + j * 4);
-                    int type = U16(a);
-                    int size = U16(a + 2);
-                    if (size <= 0 || attrOffset + size > stride)
-                        throw new InvalidDataException("Vertex attribute size exceeds stride (buffer " + i + ").");
-                    buffer.attributes.Add(new VertexAttribute { type = type, size = size, offset = attrOffset });
+                    int at = checked(attrArray + j * 4);
+                    int type = U16(at);
+                    int size = U16(at + 2);
+                    if (size == 0 || attrOffset + size > stride)
+                        throw new InvalidDataException("Invalid vertex attribute size/stride in buffer " + i);
+                    vb.attributes.Add(new VertexAttribute { type = type, size = size, offset = attrOffset });
                     attrOffset += size;
                 }
-                output.vertices.Add(buffer);
+                result.vertices.Add(vb);
             }
 
             for (int i = 0; i < indexCount; i++)
             {
-                int pos = checked(indexArray + i * 12);
-                int offset = Relative(vertexBase, pos);
-                int count = Count(pos + 4, 6000000, "indices");
-                if (count > 0 && offset == 0)
-                    throw new InvalidDataException("Nonempty index buffer with null pointer.");
-                Range(offset, (long)count * 2L);
-                output.indices.Add(new IndexBuffer { dataOffset = offset, count = count });
+                int p = checked(indexArray + i * 12);
+                int data = Relative(vertexBase, p);
+                int count = Count(p + 4, 6000000, "indices");
+                if (count > 0 && data == 0)
+                    throw new InvalidDataException("Nonempty triangle indices with null data pointer.");
+                Range(data, (long)count * 2);
+                result.indices.Add(new IndexBuffer { dataOffset = data, count = count });
             }
-            return output;
+            return result;
         }
     }
 }

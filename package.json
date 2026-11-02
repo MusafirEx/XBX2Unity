@@ -1,8 +1,8 @@
 {
   "name": "com.musafirex.xbx2unity",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "displayName": "XBX2Unity - Xenoblade X Wii U Native CAMDO Tools",
-  "description": "Native Wii U CAMDO static mesh ScriptedImporter plus optional external CPK/CASM and GLB tools.",
+  "description": "Native Wii U CAMDO ScriptedImporter with external CASMT geometry for map terrain/objects, plus optional CPK/CASM and GLB tools.",
   "unity": "2022.3",
   "keywords": [
     "xenoblade",
