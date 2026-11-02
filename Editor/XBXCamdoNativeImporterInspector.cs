@@ -169,6 +169,44 @@ namespace MusafirEx.XBX2Unity.Editor
                         "This mode visualizes source attributes and tests two texture layers only.",
                         MessageType.Warning);
                 }
+                EditorGUILayout.Space(8);
+                EditorGUILayout.LabelField("Skell Material Layers (Experimental)", EditorStyles.boldLabel);
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("importSkellNormalMaps"),
+                    new GUIContent("Bind BC5 Normal Candidates",
+                        "From source per-material NRM slots; generated materials only, not external .mat."));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("importSkellSpecularMaps"),
+                    new GUIContent("Bind SPM Specular Candidates",
+                        "From source SPM slots; requires a compatible shader and does not touch external .mat."));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("skellLayerPreviewShader"),
+                    new GUIContent("Use Skell Layer Preview Shader",
+                        "Diagnostic approximation only, not original Wii U lighting/paint pipeline."));
+                if (serializedObject.FindProperty("skellLayerPreviewShader").boolValue)
+                {
+                    var view = serializedObject.FindProperty("skellLayerDebugView");
+                    view.intValue = EditorGUILayout.Popup("Layer Debug View",
+                        view.intValue, new[] { "Composite", "Raw Base Color",
+                            "BC5 Normal Candidate", "SPM Specular Candidate",
+                            "RGBA RGB Companion Candidate" });
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("skellUseRgbCompanionAsPaintMask"),
+                        new GUIContent("Interpret _RGB as Paint Mask (Unverified)",
+                            "OFF by default. Source *_RGB may not be an RGBA paint-zone mask."));
+                    if (serializedObject.FindProperty("skellUseRgbCompanionAsPaintMask").boolValue)
+                    {
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellPaintStrength"));
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellPaintColor1"));
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellPaintColor2"));
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellPaintColor3"));
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellPaintColor4"));
+                    }
+                }
+                EditorGUILayout.HelpBox(
+                    "Role candidates use MXMD texture IDs and source names, not guessed " +
+                    "textures from another Skell. RFM/REF and glow roles are reported " +
+                    "but not assigned as specular/albedo. Paint mask interpretation is " +
+                    "an explicit experiment, OFF by default. Existing external .mat " +
+                    "overrides always take precedence; the importer does not overwrite them. " +
+                    "Use generated material previews to test new source bindings.",
+                    MessageType.Info);
                 XBXMaterialInspectorUI.Draw((XBXCamdoNativeImporter)target, serializedObject);
             }
             serializedObject.ApplyModifiedProperties();

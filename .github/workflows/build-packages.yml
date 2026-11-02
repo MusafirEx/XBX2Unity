@@ -25,6 +25,8 @@ jobs:
         run: python tools/test_skell_color_selection.py
       - name: Validate CAMDO material workflow source contracts
         run: python tools/test_material_workflow.py
+      - name: Check Skell native role/paint contracts
+        run: python tools/test_skell_layers.py
       - name: Build UPM ZIP and unitypackage
         run: python tools/build_unitypackage.py
       - name: Upload packages

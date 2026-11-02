@@ -44,6 +44,34 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell source-linked Normal, Specular and Paint layers (v0.9.1)
+
+v0.9.0's external `.mat` material overrides were confirmed persistent by the user. v0.9.1 builds the next **material phase**, not animations, while maintaining this exact override workflow.
+
+From live `dl019100`, `dl019600` and `dl109100` MXMD import logs, source name and compressed texture format hints are mapped **within each material's original texture index list**:
+- `*_NRM`, `*_NRM_B`, `*_NRMC`: **BC5** normal candidate. Source BC5 may require platform-specific tangent-space/green-channel conventions.
+- `*_SPM`: **BC1** specular candidate.
+- `*_RFM`, `*_REF`, `*_RF`: reflection candidate. Reported in manifest, never automatically bound to specular/albedo.
+- `*_GLO`, `*_GLW`: glow candidate. Reported only.
+- `*_RGB`: companion color/paint candidate. Its actual role, channel packing and Skell four-zone mask semantics **have not been established**; never assume source RGB is a native four-zone mask.
+
+### New Material Inspector controls
+
+- **Bind BC5 Normal Candidates** (OFF): opt-in binds decoded BC5 source to generated material `_BumpMap`/`_NormalMap` if shader exposes them, enabling Unity `_NORMALMAP`. Not guaranteed identical to original Skell normal rendering.
+- **Bind SPM Specular Candidates** (OFF): opt-in uses a matching BC1 `*_SPM` only if the generated Unity shader has a `_SpecGlossMap` property. URP workflow flags are configured for specular if available; other shaders may ignore this texture.
+- **Use Skell Layer Preview Shader** (OFF): creates a generated `XBX2Unity/Skell Layer Preview` material. The viewport has **Composite**, **Raw Base Color**, **BC5 Normal Candidate**, **SPM Specular Candidate**, and **RGBA RGB Companion Candidate** debug modes. The shader uses only an approximate fixed-light detail preview, not the original game's shading.
+- **Interpret _RGB as Paint Mask (Unverified)** (OFF): if intentionally enabled with the Layer Preview shader, treats RGB companion RGBA as four zones with independent four paint colors. Its paint strength defaults to **0** even when enabled; this is a controlled experiment, **not a reconstruction** of Skell Customize Colors.
+- **Source MXMD Materials / Unity Remapping** now displays original candidate slots for Normal, Specular, Reflection, Glow and RGB Companion, and each MTXT source link's inferred role.
+
+### Existing extracted .mat files are left untouched
+
+These new generated-material settings **never mutate external `.mat` assets**: v0.9.0's persistent per-MXMD external overrides always take precedence. To see new source maps in the Scene, temporarily clear the external .mat override for that particular source slot, Apply/Reimport, and inspect its generated material. You can then copy the discovered source textures and settings into your existing editable `.mat` yourself. Do not overwrite previously edited materials during extraction.
+
+To test `dl019100.camdo`: enable Import Skell MTXT Textures, leave existing base texture setting, enable Bind BC5 Normal Candidates and Bind SPM Specular Candidates, then enable Use Skell Layer Preview Shader **only if** no explicit generated shader/older diagnostic shader has higher priority. Click Apply/Reimport. Compare the normal, SPM and RGB diagnostic views before attempting any paint recoloring. Disable the paint-mask checkbox for baseline comparisons.
+
+**Validation limits:** GitHub CI tests role-matching contracts, package content and earlier GX2 regressions; the user should verify Unity 2022.3 C# compilation, shader compatibility and visual quality in a local project. HKT rigging, bone weights, texture deswizzle and source-model files are unchanged.
+
+
 ## XBX-native Unity Material workflow (v0.9.0)
 
 This release follows the **material editing workflow** of [EMD2Unity](https://github.com/MusafirEx/EMD2Unity), [Unity-CnC-SAGE-Tools W3X/W3D](https://github.com/MusafirEx/Unity-CnC-SAGE-Tools), and [Bress2Unity](https://github.com/MusafirEx/Bress2Unity) while retaining Xenoblade X source semantics.

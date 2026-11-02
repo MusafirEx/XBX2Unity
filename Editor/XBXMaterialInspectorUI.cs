@@ -69,8 +69,15 @@ namespace MusafirEx.XBX2Unity.Editor
                         }
                     }
                     EditorGUILayout.LabelField("Renderers: " + entry.rendererCount +
-                        " | Color link: " + entry.chosenAlbedoSlot +
-                        " | " + entry.bindingStatus, EditorStyles.miniLabel);
+                        " | Base: " + entry.chosenAlbedoSlot +
+                        " | Normal: " + entry.normalCandidateSlot +
+                        " | SPM: " + entry.specularCandidateSlot,
+                        EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField("Reflection: " + entry.reflectionCandidateSlot +
+                        " | Glow: " + entry.glowCandidateSlot +
+                        " | RGB Companion: " + entry.rgbCompanionSlot,
+                        EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField(entry.bindingStatus, EditorStyles.miniLabel);
                     using (new EditorGUI.DisabledScope(true))
                     {
                         EditorGUILayout.ObjectField("Imported Preview",
@@ -102,7 +109,8 @@ namespace MusafirEx.XBX2Unity.Editor
                             EditorGUILayout.LabelField(label, GUILayout.Width(122));
                             EditorGUILayout.LabelField(
                                 (string.IsNullOrEmpty(slot.sourceName) ? "(not decoded)" : slot.sourceName) +
-                                "  [" + slot.decodedFormat + ", usage " + slot.usageHint + "]",
+                                "  [" + slot.decodedFormat + ", usage " + slot.usageHint +
+                                " | " + (slot.inferredRole ?? "Unknown") + "]",
                                 EditorStyles.miniLabel);
                         }
                     }
