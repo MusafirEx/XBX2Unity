@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.2 - 2026-11-02
+- Fix Skell native skinning selector mismatch identified from actual Unity Editor.log: dl019100 had 1 SkinnedMeshRenderer + 53 static fallbacks; dl019600 had 2 + 29.
+- Root cause: v0.7.1 incorrectly treated legacy weight header selector values as absolute indices that must be present in the list of weight buffers. The actual legacy xc3_model implementation subtracts firstWeightBuffer, and when selector is before that start, uses the first weight buffer (ordinal zero).
+- Match xc3_model/src/skinning.rs WeightGroups::Legacy: preserve shared weight-buffer row concatenation for skin flags 1 and 8, including repeated buffers, rather than silently deduplicating. No invented skin weights.
+- Retain strict validation of weight row indices, finite weights, HKT palette remap, and fallback to MeshRenderer on unsupported draw calls.
+- Add resolved weight selector diagnostics to the Skell weight audit. ScriptedImporter revision 6 forces reimport after upgrade.
+- Real geometry deformation must still be tested in Unity; GitHub packaging CI only checks archives.
+
+
 ## 0.7.1 - 2026-11-02
 - Focus exclusively on Skell **bone phase**; texture and animation decoders are deferred at the user's request.
 - Read legacy MXMD bone-name skinning palette, shared skin buffer header indices and mesh render flags from CAMDO.

@@ -69,6 +69,27 @@ namespace MusafirEx.XBX2Unity.Editor
                     foreach (ushort idx in geo.weightBufferIndices)
                         output.Append(idx).Append(' ');
                     output.AppendLine();
+                    var sharedSkinIndices = new List<int>();
+                    for (int i = 0; i < geo.vertices.Count; i++)
+                        if (geo.vertices[i].Find(1) != null && geo.vertices[i].Find(2) != null)
+                            sharedSkinIndices.Add(i);
+                    if (sharedSkinIndices.Count > 0)
+                    {
+                        int firstSkin = sharedSkinIndices[0];
+                        output.Append("Validated shared weight vertex buffers: ");
+                        foreach (int index in sharedSkinIndices) output.Append(index).Append(' ');
+                        output.AppendLine();
+                        output.Append("Legacy resolved six selector ordinals: ");
+                        for (int slot = 0; slot < geo.weightBufferIndices.Length; slot++)
+                        {
+                            int raw = geo.weightBufferIndices[slot];
+                            int ordinal = raw < firstSkin ? 0 : raw - firstSkin;
+                            output.Append(slot).Append("=>")
+                                .Append(ordinal < sharedSkinIndices.Count ? ordinal.ToString() : "OUT_OF_RANGE")
+                                .Append(' ');
+                        }
+                        output.AppendLine();
+                    }
                     for (int i = 0; i < geo.vertices.Count; i++)
                     {
                         var vb = geo.vertices[i];

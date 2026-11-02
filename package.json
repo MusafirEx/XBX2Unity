@@ -1,6 +1,6 @@
 {
   "name": "com.musafirex.xbx2unity",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "displayName": "XBX2Unity - Xenoblade X Wii U Native CAMDO Tools",
   "description": "Native Wii U CAMDO/CASMT meshes with opt-in Skell HKT bone weight skinning preview, bone weight source audit, and map texturing tools.",
   "unity": "2022.3",
