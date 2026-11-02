@@ -89,6 +89,14 @@ namespace MusafirEx.XBX2Unity.Editor
         }
         internal static GameObject Build(Skeleton skeleton, bool flipX, float modelScale)
         {
+            Transform[] unused;
+            return Build(skeleton, flipX, modelScale, out unused);
+        }
+
+        internal static GameObject Build(Skeleton skeleton, bool flipX, float modelScale,
+            out Transform[] originalOrderBones)
+        {
+            originalOrderBones = null;
             if (skeleton == null || skeleton.bones.Count == 0)
                 throw new InvalidDataException("No HKT skeleton bones");
             var container = new GameObject("Skell_Rig");
@@ -125,6 +133,9 @@ namespace MusafirEx.XBX2Unity.Editor
                     : b.rotation;
                 nodes[i].transform.localScale = b.scale;
             }
+            originalOrderBones = new Transform[nodes.Length];
+            for (int i = 0; i < nodes.Length; i++)
+                originalOrderBones[i] = nodes[i].transform;
             return container;
         }
         private static bool Finite(float value) { return !float.IsNaN(value) && !float.IsInfinity(value); }

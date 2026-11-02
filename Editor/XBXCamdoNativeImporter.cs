@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(4, "camdo")]
+    [ScriptedImporter(5, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -27,6 +27,8 @@ namespace MusafirEx.XBX2Unity.Editor
         public bool importVertexColors = true;
         [Header("Skell HKT Skeleton Preview")]
         public bool importSkellHktHierarchy = true;
+        [Tooltip("Experimental: use MXMD WeightIndex and shared SkinWeights2/BoneIndices2 to build SkinnedMeshRenderer. Unsupported buffers remain MeshRenderer.")]
+        public bool importSkellBoneWeights = false;
         [Header("Material")]
         public bool createPlaceholderMaterials = true;
         [Header("Extracted Map Textures")]
@@ -71,18 +73,29 @@ namespace MusafirEx.XBX2Unity.Editor
                 string rigPath = Path.Combine(
                     Path.GetDirectoryName(ctx.assetPath) ?? string.Empty,
                     Path.GetFileNameWithoutExtension(ctx.assetPath) + "_rig.hkt");
+                Transform[] skellBones = null;
+                Transform skellRootBone = null;
                 if (importSkellHktHierarchy && File.Exists(rigPath))
                 {
                     ctx.DependsOnSourceAsset(rigPath);
                     try
                     {
                         var hkt = XBXSkellHktRig.Read(rigPath);
-                        var rigRoot = XBXSkellHktRig.Build(hkt, flipX, modelScale);
+                        Transform[] orderedBones;
+                        var rigRoot = XBXSkellHktRig.Build(hkt, flipX, modelScale, out orderedBones);
                         rigRoot.transform.SetParent(root.transform, false);
+                        skellBones = orderedBones;
+                        for (int b = 0; b < hkt.bones.Count; b++)
+                            if (hkt.bones[b].parent < 0)
+                            {
+                                skellRootBone = orderedBones[b];
+                                break;
+                            }
                         ctx.LogImportWarning("Skell HKT skeleton hierarchy: " +
-                            hkt.bones.Count + " bones imported from " + rigPath +
-                            ". Geometry is still STATIC: no verified bone weights/bindposes " +
-                            "or motion tracks have been applied.");
+                            hkt.bones.Count + " bones from " + rigPath +
+                            ". SkinnedMeshRenderer is " +
+                            (importSkellBoneWeights ? "requested (per-mesh validation enabled)." :
+                                "disabled; enable Import Skell Bone Weights in Rig tab.") );
                     }
                     catch (Exception rigError)
                     {
@@ -90,12 +103,19 @@ namespace MusafirEx.XBX2Unity.Editor
                             rigError.Message + ". Static CAMDO geometry is unaffected.");
                     }
                 }
+                if (importSkellBoneWeights && skellBones == null)
+                    ctx.LogImportWarning("Skell bone weights requested without a valid *_rig.hkt; " +
+                        "static MeshRenderer fallback is enabled.");
 
                 Dictionary<int, Material> materials = new Dictionary<int, Material>();
                 int boundBaseTextures = 0, boundBlendTextures = 0;
                 int meshHasVBlend = 0, meshHasVertexColor = 0, meshHasUv1 = 0, meshNoVBlend = 0;
                 int distinctTexturePairs = 0;
                 int missingTextureReferences = 0;
+                int skinnedDraws = 0, staticSkinFallbacks = 0;
+                var skinFallbackReasons = new Dictionary<string, int>(StringComparer.Ordinal);
+                if (!string.IsNullOrEmpty(document.skinMetadataWarning))
+                    ctx.LogImportWarning("Skell bone metadata: " + document.skinMetadataWarning);
                 string textureRoot = FindMapTextureRoot(ctx.assetPath);
                 if (!string.IsNullOrEmpty(document.textureMetadataWarning))
                     ctx.LogImportWarning("CAMDO texture metadata: " + document.textureMetadataWarning);
@@ -153,9 +173,38 @@ namespace MusafirEx.XBX2Unity.Editor
 
                         var child = new GameObject("draw_" + drawIndex.ToString("D3") + "_mat_" + draw.materialIndex);
                         child.transform.SetParent(parent.transform, false);
-                        var filter = child.AddComponent<MeshFilter>();
-                        filter.sharedMesh = mesh;
-                        var renderer = child.AddComponent<MeshRenderer>();
+                        Renderer renderer;
+                        Mesh skinned = null;
+                        string skinReason = null;
+                        bool skinOK = importSkellBoneWeights && skellBones != null &&
+                            XBXSkellSkinning.TryBuild(document, sourceModel, draw,
+                                sourceModel.geometry.vertices[(int)draw.vertexBufferIndex],
+                                mesh, skellBones, child.transform, out skinned, out skinReason);
+                        if (skinOK && skinned != null)
+                        {
+                            skinned.name += "_m" + modelIndex + "_d" + drawIndex;
+                            ctx.AddObjectToAsset("skinned_" + skinnedDraws.ToString("D5"), skinned);
+                            var skinRenderer = child.AddComponent<SkinnedMeshRenderer>();
+                            skinRenderer.sharedMesh = skinned;
+                            skinRenderer.bones = skellBones;
+                            skinRenderer.rootBone = skellRootBone != null ? skellRootBone : skellBones[0];
+                            renderer = skinRenderer;
+                            skinnedDraws++;
+                        }
+                        else
+                        {
+                            var filter = child.AddComponent<MeshFilter>();
+                            filter.sharedMesh = mesh;
+                            renderer = child.AddComponent<MeshRenderer>();
+                            if (importSkellBoneWeights)
+                            {
+                                staticSkinFallbacks++;
+                                string message = skinReason ?? "no valid skeleton/weight payload";
+                                if (!skinFallbackReasons.ContainsKey(message))
+                                    skinFallbackReasons.Add(message, 0);
+                                skinFallbackReasons[message]++;
+                            }
+                        }
 
                         if (createPlaceholderMaterials)
                         {
@@ -231,6 +280,21 @@ namespace MusafirEx.XBX2Unity.Editor
                         imported++;
                     }
                     if (imported >= meshLimit) break;
+                }
+
+                if (importSkellBoneWeights)
+                {
+                    ctx.LogImportWarning("Skell weight import: " + skinnedDraws +
+                        " SkinnedMeshRenderer draw calls, " + staticSkinFallbacks +
+                        " static fallbacks. MXMD palette bone names=" +
+                        document.skinBoneNames.Count + ".");
+                    int shown = 0;
+                    foreach (var reason in skinFallbackReasons)
+                    {
+                        if (shown++ >= 8) break;
+                        ctx.LogImportWarning("Skell skin fallback (" + reason.Value +
+                            " draws): " + reason.Key);
+                    }
                 }
 
                 if (imported == 0)
@@ -455,11 +519,12 @@ namespace MusafirEx.XBX2Unity.Editor
         }
         public sealed class Draw
         {
-            public uint vertexBufferIndex, indexBufferIndex, materialIndex;
+            public uint vertexBufferIndex, indexBufferIndex, materialIndex, flags2;
         }
         public sealed class Geometry
         {
             public LegacyCamdoReader reader;
+            public ushort[] weightBufferIndices = new ushort[6];
             public List<VertexBuffer> vertices = new List<VertexBuffer>();
             public List<IndexBuffer> indices = new List<IndexBuffer>();
         }
@@ -481,6 +546,8 @@ namespace MusafirEx.XBX2Unity.Editor
             public List<Model> models = new List<Model>();
             public List<MaterialInfo> materials = new List<MaterialInfo>();
             public List<ExternalTexture> externalTextures = new List<ExternalTexture>();
+            public List<string> skinBoneNames = new List<string>();
+            public string skinMetadataWarning;
             public string textureMetadataWarning;
         }
 
@@ -614,6 +681,7 @@ namespace MusafirEx.XBX2Unity.Editor
                     int meshPos = checked(meshArray + draw * 64);
                     model.meshes.Add(new Draw
                     {
+                        flags2 = U32(meshPos + 4),
                         vertexBufferIndex = U32(meshPos + 8),
                         indexBufferIndex = U32(meshPos + 12),
                         materialIndex = U32(meshPos + 20)
@@ -622,8 +690,10 @@ namespace MusafirEx.XBX2Unity.Editor
                 output.models.Add(model);
             }
 
-            // Material and texture metadata should never break a valid geometry
-            // import. Invalid preview links fall back to the grey material.
+            // Rig and material metadata are optional; malformed companions
+            // must never break static geometry import.
+            try { ParseSkinPalette(modelsBase, output); }
+            catch (InvalidDataException e) { output.skinMetadataWarning = e.Message; }
             try { ParseTextureMetadata(output); }
             catch (InvalidDataException e) { output.textureMetadataWarning = e.Message; }
 
@@ -717,6 +787,37 @@ namespace MusafirEx.XBX2Unity.Editor
             return output;
         }
 
+        private void ParseSkinPalette(int modelsBase, Document document)
+        {
+            // Legacy MXMD Models bone_names is offset/count at +0x64/+0x68.
+            // StringOffset32 entries have pointers relative to the bone_names
+            // array start (xc3_lib/src/mxmd/legacy.rs).
+            uint rawOffset = U32(modelsBase + 100);
+            int count = Count(modelsBase + 104, 16384, "MXMD skin bone names");
+            if (count == 0) return;
+            if (rawOffset == 0)
+                throw new InvalidDataException("MXMD skin bone palette has null pointer.");
+            int array = Relative(modelsBase, modelsBase + 100);
+            Range(array, (long)count * 4);
+            for (int i = 0; i < count; i++)
+            {
+                uint stringOffset = U32(array + i * 4);
+                if (stringOffset == 0)
+                    throw new InvalidDataException("MXMD skin bone palette entry " + i + " is null.");
+                long absolute = (long)array + stringOffset;
+                Range(absolute, 1);
+                int p = (int)absolute;
+                int end = p;
+                while (end < bytes.Length && end < p + 192 && bytes[end] != 0) end++;
+                if (end == bytes.Length || end == p + 192)
+                    throw new InvalidDataException("Unterminated MXMD bone name " + i);
+                string name = System.Text.Encoding.UTF8.GetString(bytes, p, end - p);
+                if (string.IsNullOrEmpty(name))
+                    throw new InvalidDataException("MXMD bone name is empty at " + i);
+                document.skinBoneNames.Add(name);
+            }
+        }
+
         private void ParseTextureMetadata(Document document)
         {
             uint materialPointer = U32(0x0C);
@@ -798,6 +899,8 @@ namespace MusafirEx.XBX2Unity.Editor
             Range(vertexArray, (long)vertexCount * 24);
             Range(indexArray, (long)indexCount * 12);
             var result = new Geometry { reader = this };
+            for (int i = 0; i < result.weightBufferIndices.Length; i++)
+                result.weightBufferIndices[i] = (ushort)U16(vertexBase + 16 + i * 2);
 
             for (int i = 0; i < vertexCount; i++)
             {

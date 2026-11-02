@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.1 - 2026-11-02
+- Focus exclusively on Skell **bone phase**; texture and animation decoders are deferred at the user's request.
+- Read legacy MXMD bone-name skinning palette, shared skin buffer header indices and mesh render flags from CAMDO.
+- Decode original WeightIndex/WeightIndex2 (u16x2) and shared SkinWeights2 (Float32x3; W reconstructed) / BoneIndices2 (u8x4) from Wii U big-endian vertex buffers.
+- Remap **MXMD skinning bone names** to **HKT Transform names** rather than assuming their numerical order matches.
+- Add opt-in Import Skell Bone Weights in the Rig Inspector: create separate SkinnedMeshRenderer and mesh bindposes for fully validated draw calls, otherwise retain original MeshRenderer/static geometry.
+- Select shared weight buffers conservatively using the legacy mesh flags, with per-draw fallback diagnostics and no invented weights.
+- Add independent read-only Skell Bone Weight Audit with palette/HKT name matching, vertex attribute enumeration, shared buffer slots and sampled WeightIndex ranges.
+- ScriptedImporter revision 5. The native Unity import has not yet been verified against raw user Skell assets; CI only checks package creation.
+
+
 ## 0.7.0 - 2026-11-02
 - Begin native Skell import support from chr_dl.cpk model sets (CAMDO + CASMT + CAMTP + HKT + CEA/CES).
 - Add native big-endian Havok 2013 HKT skeleton reader (names, parent indices, TRS) following xc3_lib/hkt.rs.
