@@ -169,6 +169,7 @@ namespace MusafirEx.XBX2Unity.Editor
                         "This mode visualizes source attributes and tests two texture layers only.",
                         MessageType.Warning);
                 }
+                XBXMaterialInspectorUI.Draw((XBXCamdoNativeImporter)target, serializedObject);
             }
             serializedObject.ApplyModifiedProperties();
             ApplyRevertGUI();

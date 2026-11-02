@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.0 - 2026-11-02
+- Adopt reusable Unity material workflow patterns from MusafirEx/EMD2Unity, MusafirEx/Unity-CnC-SAGE-Tools (W3X/W3D), and MusafirEx/Bress2Unity without copying their game-format assumptions.
+- Add XBXMaterialManifest per CAMDO import, carrying stable MXMD material index, source color, original texture-slot IDs, decoded MTXT names/formats/usage hints, selected albedo slot, associated generated material, assigned material and renderer count.
+- Add Material Inspector table with per-MXMD-material source links, generated material preview, editable external .mat override, and batch/per-material Extract .mat actions. Extraction clones the generated material to Assets/<model>_Materials and attaches an index-keyed override; original game files remain read-only.
+- Add generated Unity shader override and choose default Standard/URP/HDRP shader based on the active rendering pipeline, like EMD2Unity. Explicit override takes precedence over experimental diagnostic shader options.
+- Apply external .mat overrides only after creating internal native material previews, so users can compare original MTXT bindings and edited materials. Accept only Assets/*.mat, reject CAMDO sub-assets, register asset dependencies and preserve source material identity.
+- Bump CAMDO ScriptedImporter to revision 11. Preserve all v0.8.4 GX2 deswizzle, MTXT color/paint comparison, gMatCol, UV settings, HKT rig and weights. No changes to animation decoding.
+- Add CI contract checks for material manifest, extraction/override structure and packaged source files.
+- GitHub Actions checks source invariants and packages but cannot verify C# compilation or Unity Inspector usability; test locally in Unity 2022.3.
+
+
 ## 0.8.4 - 2026-11-02
 - Fix the source-albedo preference for dl109100: the importer always preferred *_RGB companion textures instead of the unsuffixed primary map for five of seven materials. Original Skell color customization may use RGB companion maps in a separate shader pass; the exact semantics are not yet verified.
 - Make primary unsuffixed BC1 textures the default albedo choice. Add explicit **Prefer Skell _RGB as Albedo** option (OFF by default) under Material > Auto Select Skell Color Texture for comparing behavior. Manual source material slot override remains available.
