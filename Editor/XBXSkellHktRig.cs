@@ -74,7 +74,7 @@ namespace MusafirEx.XBX2Unity.Editor
                 br.Skip(4);
                 if (!Finite(t.x) || !Finite(t.y) || !Finite(t.z) ||
                     !Finite(q.x) || !Finite(q.y) || !Finite(q.z) || !Finite(q.w) ||
-                    q.sqrMagnitude < 0.001f ||
+                    (q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w) < 0.001f ||
                     !Finite(sc.x) || !Finite(sc.y) || !Finite(sc.z) ||
                     Mathf.Abs(sc.x) > 100 || Mathf.Abs(sc.y) > 100 || Mathf.Abs(sc.z) > 100)
                     throw new InvalidDataException("Invalid HKT bone transform " + i + " (" + names[i] + ")");
