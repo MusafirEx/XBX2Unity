@@ -1,0 +1,16 @@
+{
+  "name": "MusafirEx.XBX2Unity.Editor",
+  "rootNamespace": "MusafirEx.XBX2Unity",
+  "references": [],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

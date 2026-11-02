@@ -1,0 +1,21 @@
+{
+  "name": "com.musafirex.xbx2unity",
+  "version": "0.3.2",
+  "displayName": "XBX2Unity - Xenoblade X Wii U Map Tools",
+  "description": "Editor-only Wii U CriPakTools CPK extraction, CASM extraction, and CANV/CASM binary audit for Xenoblade Chronicles X.",
+  "unity": "2022.3",
+  "keywords": [
+    "xenoblade",
+    "wiiu",
+    "cpk",
+    "casm",
+    "canv",
+    "editor",
+    "extractor"
+  ],
+  "author": {
+    "name": "MusafirEx",
+    "url": "https://github.com/MusafirEx"
+  },
+  "license": "MIT"
+}

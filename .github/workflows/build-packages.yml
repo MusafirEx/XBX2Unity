@@ -1,0 +1,29 @@
+name: Build XBX2Unity Unity packages
+
+on:
+  push:
+    branches:
+      - main
+      - feature/unity-map-extractor-package
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build UPM ZIP and unitypackage
+        run: python tools/build_unitypackage.py
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: XBX2Unity-packages
+          path: dist/
+          if-no-files-found: error
