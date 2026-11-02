@@ -44,6 +44,14 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell diagnostic shader syntax fix (v0.8.3)
+
+Unity 2022.3 D3D11 `Editor.log` reported:
+`Shader error in 'XBX2Unity/Skell Color Diagnostic': syntax error: unexpected token 'line'`
+at `XBXSkellColorDiagnostic.shader` lines 56, 58, 59. The HLSL reserved identifier `line` was accidentally used as a local variable for checkerboard grid lines. v0.8.3 renames it to `gridLineWeight`, retaining UV0 Checkerboard/Gradient and all other shader output unchanged. The Editor C# assembly had compiled without errors.
+
+After updating the Git UPM package and recompiling shaders, reselect `dl019600.camdo`, open **Material > Skell Color Diagnostic Shader**, select **UV0 Checkerboard (no texture)** and confirm no shader syntax errors, then compare to **Raw Color Texture**. Note that GitHub Actions only runs source assertions and builds package archives; a Windows Unity D3D11 shader compile still needs checking locally.
+
 ## Skell MTXT deswizzle and UV test fix (v0.8.2)
 
 The user confirmed that **Raw Color Texture itself maps incorrectly** on Skell models. This diagnostic excludes gMatCol and custom paint tint; the problem must be investigated at texture block decoding, source-material selection or UV mapping.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.3 - 2026-11-02
+- Fix Unity 2022.3 D3D11 Skell diagnostic shader syntax error: local identifier `line` is reserved in HLSL. Rename it to `gridLineWeight` in the UV0 Checkerboard debug view.
+- Add regression assertions to GX2 test workflow to catch the invalid shader identifier being reintroduced; the CI test does not replace actual shader compilation.
+- Add missing Unity .meta for `tools/test_gx2_address.py` to remove the immutable Git package warning.
+- Keep GX2 deswizzle fix, texture color selection, rig, skin weights and animation logic unchanged.
+
+
 ## 0.8.2 - 2026-11-02
 - Fix a verified Wii U GX2 deswizzle address bug: BC1/BC5 D2-tiled macro pipe bit is y3 XOR x3. Previous v0.8.0/0.8.1 mistakenly used x4, scrambling 4x4 BCn block locations and making "Raw Color Texture" map incorrectly.
 - Tighten source image semantics: _SPM, _RFM, _RF, _REF, _GLO, _GLW, _OCL and _DEP are never automatically used as color, even when MXMD texture usage code is a generic 32. Prefer explicit _RGB/_COL/_DCL/_AVA color maps over ambiguous bare names.
