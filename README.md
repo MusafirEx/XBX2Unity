@@ -44,6 +44,24 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## XBX-native Unity Material workflow (v0.9.0)
+
+This release follows the **material editing workflow** of [EMD2Unity](https://github.com/MusafirEx/EMD2Unity), [Unity-CnC-SAGE-Tools W3X/W3D](https://github.com/MusafirEx/Unity-CnC-SAGE-Tools), and [Bress2Unity](https://github.com/MusafirEx/Bress2Unity) while retaining Xenoblade X source semantics.
+
+**What is shared with the other importers:**
+- Source-indexed material manifest saved as a `XBX Material Manifest` ScriptableObject sub-asset, with index/preview material/source textures/renderer counts.
+- Material Inspector lists all MXMD material slots and source MTXT texture names, format, usage and binding status.
+- Optional **Generated Material Shader** override (Unity `Shader` reference). Without it, the importer chooses a Lit shader appropriate for the active Built-in/URP/HDRP render pipeline. Explicit shaders override the diagnostic and terrain fallback shader.
+- **External .mat Override** on each source MXMD index; choose your own editable Material asset under `Assets/`. External materials cannot point at their own CAMDO imported sub-assets and are never written back to the source file.
+- **Extract** per material or **Extract All Generated Materials as .mat and Assign Overrides**: copies generated materials to `Assets/<source-folder>/<CAMDO-name>_Materials/MXMD_0000.mat` etc. Existing valid external overrides are preserved. Apply / SaveAndReimport relinks those external .mat assets to the original material indices.
+
+**What remains specific to XBX:** The original MXMD numeric material indices and slot pointers, big-endian GX2 MTXT/BC1/BC5 decoder, exact source texture IDs, gMatCol, optional _RGB companion preference and custom Skell paint diagnostics. Native HKT bones, skin weights, static mesh fallback and UV handling are not changed. The source game's original shader stages are still not fully reconstructed and no W3X FXShader, EMD EMAT or BRRES TEV is applied to an XBX model.
+
+**How to use:** Update package and reimport `dl109100.camdo` or `dl019600.camdo`. In **Material**, enable Skell textures as before, scroll to **Source MXMD Materials / Unity Remapping**, inspect generated material / source texture slots. Click **Extract** or **Extract All**, edit the resulting `.mat` file(s) in the Project, and Apply/Reimport to see them on the XBX mesh. Assign any other external `.mat` using the override field if desired. To return to native preview, clear the override, then Apply.
+
+**Verification limits:** v0.9.0 was designed from the live source repositories and CI checks source/packaging. Unity 2022.3 importer compilation and runtime preview must still be verified locally, especially the new Material Inspector and external override persistence.
+
+
 ## Skell source texture selection and _RGB companion (v0.8.4)
 
 The Unity `dl109100.camdo` Editor.log from November 2, 2026 reports **24 MTXT textures decoded, 7 material textures bound, 38 draw calls**, with the first five applicable material groups automatically picking `*_RGB` texture variants because v0.8.3 assigned them a score of 160 vs 90 for unsuffixed base textures. Source entries include `DL109100_FL` alongside `DL109100_FL_RGB`, `DMG`/ `DMG_RGB`, `DL109100_CP`/`_RGB`, `DL109100_SKY`/`_RGB`, and `DL109100`/`_RGB`.

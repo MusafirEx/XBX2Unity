@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(10, "camdo")]
+    [ScriptedImporter(11, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -31,6 +31,10 @@ namespace MusafirEx.XBX2Unity.Editor
         public bool importSkellBoneWeights = false;
         [Header("Material")]
         public bool createPlaceholderMaterials = true;
+        [Tooltip("Optional shader for newly generated CAMDO material previews. Explicit shader overrides take precedence over diagnostic or terrain shaders.")]
+        public Shader generatedMaterialShaderOverride;
+        [Tooltip("Source MXMD material index -> external Unity .mat. Keeps the original CAMDO intact.")]
+        public List<XBXMaterialOverride> materialOverrides = new List<XBXMaterialOverride>();
         [Header("Skell Native MTXT Preview")]
         [Tooltip("Opt-in: decode BC1/BC5 MTXT GX2 images from this CAMDO and its CASMT. Preserves rig and mesh import.")]
         public bool importSkellMtxtTextures = false;
@@ -144,6 +148,75 @@ namespace MusafirEx.XBX2Unity.Editor
                             texError.Message + ". Bone weights and meshes are preserved.");
                     }
                 }
+                // Stable per-MXMD-material provenance, inspired by the
+                // BRRES and SAGE importers. No filename guesses or global
+                // material changes: the XBX native index is authoritative.
+                var manifest = ScriptableObject.CreateInstance<XBXMaterialManifest>();
+                manifest.name = "XBX Material Manifest";
+                for (int sourceMaterial = 0; sourceMaterial < document.materials.Count; sourceMaterial++)
+                {
+                    var materialSource = document.materials[sourceMaterial];
+                    var entry = new XBXMaterialEntry
+                    {
+                        materialIndex = sourceMaterial,
+                        sourceName = "MXMD_" + sourceMaterial.ToString("D4"),
+                        sourceColor = materialSource.sourceColor,
+                        bindingStatus = "Not bound"
+                    };
+                    for (int slot = 0; slot < materialSource.textureIndices.Count; slot++)
+                    {
+                        int textureId = materialSource.textureIndices[slot];
+                        var sourceTexture = new XBXMaterialTextureSlot
+                        {
+                            slot = slot,
+                            textureId = textureId,
+                            usageHint = "Not decoded",
+                            decodedFormat = "N/A"
+                        };
+                        if (skellMtxt.TryGetValue(textureId, out var decoded))
+                        {
+                            sourceTexture.sourceName = decoded.sourceName;
+                            sourceTexture.usageHint = decoded.usage.ToString();
+                            sourceTexture.decodedFormat = decoded.format == 49 ? "GX2 BC1" :
+                                decoded.format == 53 ? "GX2 BC5" : decoded.format.ToString();
+                            sourceTexture.decodedTexture = decoded.texture;
+                            if (slot == 0 && !string.IsNullOrEmpty(decoded.sourceName))
+                                entry.sourceName = decoded.sourceName;
+                        }
+                        entry.textureSlots.Add(sourceTexture);
+                    }
+                    manifest.entries.Add(entry);
+                }
+                ctx.AddObjectToAsset("xbx_material_manifest", manifest);
+
+                // External .mat overrides are keyed by source MXMD index, not
+                // by transient material/mesh names. Reject CAMDO sub-assets.
+                var externalMaterials = new Dictionary<int, Material>();
+                if (materialOverrides != null)
+                    foreach (var option in materialOverrides)
+                    {
+                        if (option == null || option.material == null || option.materialIndex < 0 ||
+                            externalMaterials.ContainsKey(option.materialIndex)) continue;
+                        string sourcePath = AssetDatabase.GetAssetPath(option.material);
+                        sourcePath = sourcePath == null ? "" : sourcePath.Replace('\\', '/');
+                        if (!sourcePath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) ||
+                            !sourcePath.EndsWith(".mat", StringComparison.OrdinalIgnoreCase) ||
+                            sourcePath == ctx.assetPath)
+                        {
+                            ctx.LogImportWarning("Rejected material override #" +
+                                option.materialIndex + ": use a separate .mat asset under Assets.");
+                            continue;
+                        }
+                        externalMaterials.Add(option.materialIndex, option.material);
+                        ctx.DependsOnSourceAsset(sourcePath);
+                    }
+                if (generatedMaterialShaderOverride != null)
+                {
+                    string shaderAsset = AssetDatabase.GetAssetPath(generatedMaterialShaderOverride);
+                    if (!string.IsNullOrEmpty(shaderAsset) &&
+                        !string.Equals(shaderAsset, ctx.assetPath, StringComparison.OrdinalIgnoreCase))
+                        ctx.DependsOnSourceAsset(shaderAsset);
+                }
                 Dictionary<int, Material> materials = new Dictionary<int, Material>();
                 int boundBaseTextures = 0, boundBlendTextures = 0, boundSkellTextures = 0;
                 int blockedNormalAsColor = 0, unmatchedSkellMaterials = 0;
@@ -254,8 +327,8 @@ namespace MusafirEx.XBX2Unity.Editor
                                 // Shader.Find can return null in an AssetImportWorker
                                 // before custom shader registration. Load by package path
                                 // first for UPM; Shader.Find remains the .unitypackage fallback.
-                                Shader shader = null;
-                                if (enableExperimentalEdgeBlend)
+                                Shader shader = generatedMaterialShaderOverride;
+                                if (shader == null && enableExperimentalEdgeBlend)
                                 {
                                     const string shaderPath =
                                         "Packages/com.musafirex.xbx2unity/Runtime/Shaders/XBXMapVertexBlend.shader";
@@ -280,8 +353,7 @@ namespace MusafirEx.XBX2Unity.Editor
                                         ctx.DependsOnSourceAsset(diagnosticPath);
                                 }
                                 if (shader == null)
-                                    shader = Shader.Find("Universal Render Pipeline/Lit") ??
-                                        Shader.Find("HDRP/Lit") ?? Shader.Find("Standard") ?? Shader.Find("Unlit/Texture");
+                                    shader = FindPipelineShader();
                                 if (shader == null) throw new InvalidDataException("No supported material shader is available.");
                                 mat = new Material(shader) { name = "mat_" + materialId.ToString("D4") };
                                 if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", Color.white);
@@ -359,6 +431,15 @@ namespace MusafirEx.XBX2Unity.Editor
                                         }
                                     }
                                     if (selected == null) unmatchedSkellMaterials++;
+                                    if (materialId >= 0 && materialId < manifest.entries.Count)
+                                    {
+                                        manifest.entries[materialId].chosenAlbedoSlot = selected == null
+                                            ? -1 : selectedSlot;
+                                        manifest.entries[materialId].bindingStatus = selected == null
+                                            ? "No verified albedo; source links preserved"
+                                            : "Selected MXMD slot " + selectedSlot +
+                                              " -> texture " + ids[selectedSlot];
+                                    }
                                     if (skellMaterialsDiagnosed++ < 24)
                                     {
                                         var info = new System.Text.StringBuilder();
@@ -414,8 +495,27 @@ namespace MusafirEx.XBX2Unity.Editor
                                 }
                                 materials.Add(materialId, mat);
                                 ctx.AddObjectToAsset("material_" + materialId.ToString("D4"), mat);
+                                if (materialId >= 0 && materialId < manifest.entries.Count)
+                                    manifest.entries[materialId].generatedMaterial = mat;
                             }
                             renderer.sharedMaterial = mat;
+                        }
+                        // Apply the user's external .mat after generating native
+                        // preview assets so source metadata remains inspectable.
+                        int sourceIndex = (int)draw.materialIndex;
+                        if (externalMaterials.TryGetValue(sourceIndex, out var overrideMaterial))
+                            renderer.sharedMaterial = overrideMaterial;
+                        if (sourceIndex >= 0 && sourceIndex < manifest.entries.Count)
+                        {
+                            var materialEntry = manifest.entries[sourceIndex];
+                            materialEntry.rendererCount++;
+                            materialEntry.assignedMaterial = renderer.sharedMaterial;
+                            if (overrideMaterial != null)
+                                materialEntry.bindingStatus = "External Material override";
+                            else if (renderer.sharedMaterial == null)
+                                materialEntry.bindingStatus = "No Unity material assigned";
+                            else if (!importSkellMtxtTextures)
+                                materialEntry.bindingStatus = "Generated material; source links retained";
                         }
                         imported++;
                     }
@@ -477,6 +577,21 @@ namespace MusafirEx.XBX2Unity.Editor
         // Exact file-layout mapping from casmExtract, not basename guessing:
         // textures/<container>/<four digit id>.png for cached terrain,
         // textures/<four digit id>.png for uncached object textures.
+        private static Shader FindPipelineShader()
+        {
+            // EMD2Unity's pipeline-aware default, without hard-wiring
+            // the project to URP when it uses Built-In or HDRP.
+            var pipeline = GraphicsSettings.currentRenderPipeline;
+            string type = pipeline == null ? "" : pipeline.GetType().Name;
+            Shader shader = type.IndexOf("Universal", StringComparison.OrdinalIgnoreCase) >= 0
+                ? Shader.Find("Universal Render Pipeline/Lit")
+                : type.IndexOf("HD", StringComparison.OrdinalIgnoreCase) >= 0
+                    ? Shader.Find("HDRP/Lit") : Shader.Find("Standard");
+            return shader ?? Shader.Find("Standard") ??
+                Shader.Find("Universal Render Pipeline/Lit") ??
+                Shader.Find("HDRP/Lit") ?? Shader.Find("Unlit/Texture");
+        }
+
         private static string FindMapTextureRoot(string assetPath)
         {
             string folder = Path.GetDirectoryName(assetPath).Replace('\\', '/');
