@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(7, "camdo")]
+    [ScriptedImporter(8, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -35,6 +35,14 @@ namespace MusafirEx.XBX2Unity.Editor
         [Tooltip("Opt-in: decode BC1/BC5 MTXT GX2 images from this CAMDO and its CASMT. Preserves rig and mesh import.")]
         public bool importSkellMtxtTextures = false;
         [Range(1, 256)] public int maxSkellTextures = 96;
+        [Tooltip("Prioritize source BC1 color/usage over the material's first slot. Never auto-assign BC5 normal data to albedo.")]
+        public bool autoSelectSkellColorTexture = true;
+        [Tooltip("Multiply the base texture by MXMD legacy Material.color (gMatCol).")]
+        public bool useSkellMaterialColor = true;
+        [Tooltip("Use an unlit diagnostic shader to examine base texture, source vertex color and gMatCol.")]
+        public bool skellColorDiagnosticShader = false;
+        public bool skellUseVertexColor = false;
+        [Range(0, 3)] public int skellDebugView = 0;
         [Header("Extracted Map Textures")]
         public bool bindExtractedTextures = true;
         [Range(0, 15)] public int baseTextureSlot = 0;
@@ -136,6 +144,8 @@ namespace MusafirEx.XBX2Unity.Editor
                 }
                 Dictionary<int, Material> materials = new Dictionary<int, Material>();
                 int boundBaseTextures = 0, boundBlendTextures = 0, boundSkellTextures = 0;
+                int blockedNormalAsColor = 0, unmatchedSkellMaterials = 0;
+                int skellMaterialsDiagnosed = 0;
                 int meshHasVBlend = 0, meshHasVertexColor = 0, meshHasUv1 = 0, meshNoVBlend = 0;
                 int distinctTexturePairs = 0;
                 int missingTextureReferences = 0;
@@ -256,6 +266,17 @@ namespace MusafirEx.XBX2Unity.Editor
                                         AssetDatabase.LoadAssetAtPath<Shader>(shaderPath) != null)
                                         ctx.DependsOnSourceAsset(shaderPath);
                                 }
+                                if (shader == null && importSkellMtxtTextures &&
+                                    skellColorDiagnosticShader)
+                                {
+                                    const string diagnosticPath =
+                                        "Packages/com.musafirex.xbx2unity/Runtime/Shaders/XBXSkellColorDiagnostic.shader";
+                                    shader = AssetDatabase.LoadAssetAtPath<Shader>(diagnosticPath) ??
+                                        Shader.Find("XBX2Unity/Skell Color Diagnostic");
+                                    if (shader != null &&
+                                        AssetDatabase.LoadAssetAtPath<Shader>(diagnosticPath) != null)
+                                        ctx.DependsOnSourceAsset(diagnosticPath);
+                                }
                                 if (shader == null)
                                     shader = Shader.Find("Universal Render Pipeline/Lit") ??
                                         Shader.Find("HDRP/Lit") ?? Shader.Find("Standard") ?? Shader.Find("Unlit/Texture");
@@ -273,20 +294,92 @@ namespace MusafirEx.XBX2Unity.Editor
                                 if (mat.HasProperty("_DebugView")) mat.SetFloat("_DebugView", blendDebugView);
                                 if (mat.HasProperty("_UseVertexTint")) mat.SetFloat("_UseVertexTint", useVertexTint ? 1f : 0f);
                                 if (mat.HasProperty("_EnableBlend")) mat.SetFloat("_EnableBlend", 0f);
+                                if (importSkellMtxtTextures && useSkellMaterialColor &&
+                                    materialId >= 0 && materialId < document.materials.Count)
+                                {
+                                    Color nativeColor = document.materials[materialId].sourceColor;
+                                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", nativeColor);
+                                    if (mat.HasProperty("_Color")) mat.SetColor("_Color", nativeColor);
+                                }
+                                if (mat.HasProperty("_UseVertexColor"))
+                                    mat.SetFloat("_UseVertexColor", skellUseVertexColor ? 1f : 0f);
+                                if (mat.HasProperty("_DebugView") && skellColorDiagnosticShader &&
+                                    shader.name == "XBX2Unity/Skell Color Diagnostic")
+                                    mat.SetFloat("_DebugView", skellDebugView);
 
                                 if (importSkellMtxtTextures &&
                                     materialId >= 0 && materialId < document.materials.Count)
                                 {
                                     var ids = document.materials[materialId].textureIndices;
-                                    if (baseTextureSlot < ids.Count &&
-                                        skellMtxt.TryGetValue(ids[baseTextureSlot], out var sourceTex))
+                                    XBXSkellMtxt.Record selected = null;
+                                    int selectedSlot = -1;
+                                    int bestScore = -1;
+                                    if (autoSelectSkellColorTexture)
                                     {
-                                        var skellTexture = sourceTex.texture;
-                                        if (mat.HasProperty("_BaseMap"))
-                                            mat.SetTexture("_BaseMap", skellTexture);
-                                        if (mat.HasProperty("_MainTex"))
-                                            mat.SetTexture("_MainTex", skellTexture);
-                                        boundSkellTextures++;
+                                        // Source texture usage and pixel format are
+                                        // stronger clues than a fixed link position.
+                                        for (int slot = 0; slot < ids.Count; slot++)
+                                        {
+                                            if (!skellMtxt.TryGetValue(ids[slot], out var candidate))
+                                                continue;
+                                            int score = candidate.ColorScore;
+                                            if (score > bestScore)
+                                            {
+                                                bestScore = score;
+                                                selected = candidate;
+                                                selectedSlot = slot;
+                                            }
+                                        }
+                                        if (bestScore < 0) selected = null;
+                                    }
+                                    else if (baseTextureSlot < ids.Count)
+                                    {
+                                        selectedSlot = baseTextureSlot;
+                                        skellMtxt.TryGetValue(ids[selectedSlot], out selected);
+                                    }
+
+                                    if (selected != null && selected.texture != null)
+                                    {
+                                        if (selected.IsNormalData)
+                                        {
+                                            blockedNormalAsColor++;
+                                            // Even explicit selection should not assign
+                                            // a normal map as surface albedo.
+                                            selected = null;
+                                        }
+                                        else
+                                        {
+                                            if (mat.HasProperty("_BaseMap"))
+                                                mat.SetTexture("_BaseMap", selected.texture);
+                                            if (mat.HasProperty("_MainTex"))
+                                                mat.SetTexture("_MainTex", selected.texture);
+                                            boundSkellTextures++;
+                                        }
+                                    }
+                                    if (selected == null) unmatchedSkellMaterials++;
+                                    if (skellMaterialsDiagnosed++ < 24)
+                                    {
+                                        var info = new System.Text.StringBuilder();
+                                        info.Append("Skell material ").Append(materialId)
+                                            .Append(" selected slot=").Append(selectedSlot)
+                                            .Append(" sourceTexture=").Append(selected == null
+                                                ? "(none)" : selected.texture.name)
+                                            .Append(" nativeColor=")
+                                            .Append(document.materials[materialId].sourceColor)
+                                            .Append(" source links: ");
+                                        for (int slot = 0; slot < ids.Count && slot < 12; slot++)
+                                        {
+                                            info.Append('[').Append(slot).Append(":id")
+                                                .Append(ids[slot]);
+                                            if (skellMtxt.TryGetValue(ids[slot], out var tex))
+                                                info.Append(" fmt=").Append(tex.format)
+                                                    .Append(" usage=").Append(tex.usage)
+                                                    .Append(" name=").Append(tex.sourceName)
+                                                    .Append(" score=").Append(tex.ColorScore);
+                                            else info.Append(" missing");
+                                            info.Append("] ");
+                                        }
+                                        ctx.LogImportWarning(info.ToString());
                                     }
                                 }
                                 if (!importSkellMtxtTextures &&
@@ -351,6 +444,8 @@ namespace MusafirEx.XBX2Unity.Editor
                         geometryCache.Count + " unique meshes. Bound extracted base textures: " +
                         boundBaseTextures + ", native Skell material textures: " + boundSkellTextures +
                         ", experimental blended materials: " + boundBlendTextures +
+                        ", skipped normal-map albedo selections: " + blockedNormalAsColor +
+                        ", Skell materials without color image: " + unmatchedSkellMaterials +
                         ", unresolved texture references: " + missingTextureReferences +
                         ". vBlend buffers=" + meshHasVBlend +
                         ", without vBlend=" + meshNoVBlend +
@@ -580,6 +675,7 @@ namespace MusafirEx.XBX2Unity.Editor
         public sealed class MaterialInfo
         {
             public List<int> textureIndices = new List<int>();
+            public Color sourceColor = Color.white;
         }
         public sealed class ExternalTexture
         {
@@ -901,6 +997,19 @@ namespace MusafirEx.XBX2Unity.Editor
                         throw new InvalidDataException("Material " + i + " link table is missing");
                     Range(linkArray, (long)linkCount * 4);
                     var material = new MaterialInfo();
+                    // Legacy MXMD Material.color (gMatCol) is 4 BE f32
+                    // immediately after name pointer and flags.
+                    float cr = BEFloat(materialAt + 8);
+                    float cg = BEFloat(materialAt + 12);
+                    float cb = BEFloat(materialAt + 16);
+                    float ca = BEFloat(materialAt + 20);
+                    if (!float.IsNaN(cr) && !float.IsInfinity(cr) &&
+                        !float.IsNaN(cg) && !float.IsInfinity(cg) &&
+                        !float.IsNaN(cb) && !float.IsInfinity(cb) &&
+                        !float.IsNaN(ca) && !float.IsInfinity(ca))
+                        material.sourceColor = new Color(cr, cg, cb, ca);
+                    // Malformed optional tint must not invalidate otherwise
+                    // functional MXMD material texture bindings.
                     for (int j = 0; j < linkCount; j++)
                         material.textureIndices.Add(U16(linkArray + j * 4));
                     document.materials.Add(material);

@@ -42,6 +42,8 @@ INCLUDE = (
     "Runtime.meta", "Runtime/Shaders.meta",
     "Runtime/Shaders/XBXMapVertexBlend.shader",
     "Runtime/Shaders/XBXMapVertexBlend.shader.meta",
+    "Runtime/Shaders/XBXSkellColorDiagnostic.shader",
+    "Runtime/Shaders/XBXSkellColorDiagnostic.shader.meta",
 )
 
 
@@ -114,6 +116,7 @@ def main() -> None:
         f"{PREFIX}/Runtime": None,
         f"{PREFIX}/Runtime/Shaders": None,
         f"{PREFIX}/Runtime/Shaders/XBXMapVertexBlend.shader": "Runtime/Shaders/XBXMapVertexBlend.shader",
+        f"{PREFIX}/Runtime/Shaders/XBXSkellColorDiagnostic.shader": "Runtime/Shaders/XBXSkellColorDiagnostic.shader",
         f"{PREFIX}/README.md": "README.md",
         f"{PREFIX}/LICENSE.md": "LICENSE.md",
         f"{PREFIX}/CHANGELOG.md": "CHANGELOG.md",

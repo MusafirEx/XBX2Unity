@@ -44,6 +44,23 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell original color / material diagnostics (v0.8.1)
+
+Unity Editor.log confirmed dl019600.camdo imports 20 MTXT texture assets and 5 mapped Skell material images, but the model has incorrect surface colors. Skinning works on 31/31 mesh draw calls.
+
+**Probable original issue:** v0.8.0 always used material texture slot 0 as base color, even when the source image was a BC5 normal map, and forced Unity material colors to white instead of reading MXMD gMatCol.
+
+Changes in Material Inspector:
+- Auto Select Skell Color Texture (ON by default): inspect all material links, favor BC1 textures with original COL/RGB/AVA usage hints; skip BC5 and NRM.
+- Use Skell Material Color (ON by default): apply MXMD legacy Material.color as the source gMatCol RGBA. Disable to compare without source tint.
+- Skell Color Diagnostic Shader (OFF by default): opt-in unlit XBX2Unity/Skell Color Diagnostic shader. Debug View = Composite, Raw Color Texture, Source Vertex Color, or Source gMatCol.
+- Skell Use Vertex Color (OFF by default): multiply source vColor when it genuinely represents tint. Do not automatically interpret all source vColor as visible color.
+- Base Texture Slot stays available in manual selection mode, but BC5/NRM is still rejected as albedo.
+
+After selecting dl019600.camdo, reimport and read Console: up to 24 source material diagnostic lines show each link's source ID, BC1/BC5 format, original usage code, source filename, score, chosen slot and source material color.
+
+**Important:** this is not a reconstruction of the original Monolith Soft Skell shader. Source color can also depend on multi-layer painting, specular/metallic reflections, masks or other parameters. If the Raw Color Texture looks corrupt or tiled incorrectly, investigate GX2 swizzle/mapping before changing shader tint. Skinning and animation are untouched.
+
 ## Skell native MTXT texture preview (v0.8.0)
 
 The user tested Skell bone deformation on two models and confirmed the v0.7.2 hierarchy, weight remapping and SkinnedMeshRenderer work. The new work begins the **Texture phase** while preserving rig and weight behavior.

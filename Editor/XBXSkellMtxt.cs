@@ -14,9 +14,33 @@ namespace MusafirEx.XBX2Unity.Editor
     {
         internal sealed class Record
         {
-            internal int id, width, height, format;
-            internal string source;
+            internal int id, width, height, format, usage;
+            internal string source, sourceName;
             internal Texture2D texture;
+            internal bool IsNormalData
+            {
+                get
+                {
+                    string n = (sourceName ?? "").ToUpperInvariant();
+                    return format == 53 || usage == 18 || usage == 530 ||
+                        n.Contains("_NRM") || n.Contains("_NM") || n.Contains("NORMAL");
+                }
+            }
+            internal int ColorScore
+            {
+                get
+                {
+                    if (IsNormalData || format != 49 || usage == 16 ||
+                        usage == 528 || usage == 65569) return -1;
+                    string n = (sourceName ?? "").ToUpperInvariant();
+                    if (usage == 80) return 120;
+                    if (usage == 96 || usage == 48 || usage == 32 ||
+                        usage == 34 || usage == 544) return 110;
+                    if (n.Contains("_COL") || n.Contains("_RGB") ||
+                        n.Contains("_DCL") || n.Contains("_AVA")) return 100;
+                    return 20; // BC1 without a semantic usage hint
+                }
+            }
         }
         private static uint U32(byte[] data, int p)
         {
@@ -47,6 +71,21 @@ namespace MusafirEx.XBX2Unity.Editor
             return (int)p;
         }
 
+        // String offsets in legacy PackedTexture and PackedExternalTexture are
+        // relative to the owning PackedTextures pool, not to the descriptor.
+        private static string ReadName(byte[] data, int pool, uint relative)
+        {
+            if (relative == 0) return "";
+            long at = (long)pool + relative;
+            if (at < 0 || at >= data.Length) return "";
+            int start = (int)at, end = start;
+            while (end < data.Length && end < start + 96 && data[end] != 0) end++;
+            if (end == data.Length || end == start + 96) return "";
+            for (int i = start; i < end; i++)
+                if (data[i] < 32 || data[i] > 126) return "";
+            return System.Text.Encoding.ASCII.GetString(data, start, end - start);
+        }
+
         internal static Dictionary<int, Record> Decode(byte[] camdo, string casmtPath,
             int limit, out string message)
         {
@@ -70,7 +109,12 @@ namespace MusafirEx.XBX2Unity.Editor
                         if (n == 0 || size < 112 || start < 0 ||
                             start + size > camdo.Length) continue;
                         Record record = DecodeOne(camdo, (int)start, size, "packed", i, warnings);
-                        if (record != null) results[i] = record;
+                        if (record != null)
+                        {
+                            record.usage = unchecked((int)U32(camdo, p));
+                            record.sourceName = ReadName(camdo, packed, U32(camdo, p + 12));
+                            results[i] = record;
+                        }
                     }
                 }
             }
@@ -139,6 +183,8 @@ namespace MusafirEx.XBX2Unity.Editor
                 Record record = DecodeOne(casmt, (int)start, length,
                     highToLow != null ? "high" : "low", texId, warnings);
                 if (record == null) continue;
+                record.usage = unchecked((int)U32(header, entry));
+                record.sourceName = ReadName(header, pool, U32(header, entry + 12));
                 if (textures.TryGetValue(texId, out Record old) && old.texture != null)
                     UnityEngine.Object.DestroyImmediate(old.texture);
                 textures[texId] = record;

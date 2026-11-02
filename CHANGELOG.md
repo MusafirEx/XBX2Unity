@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.1 - 2026-11-02
+- Address v0.8.0 Skell MTXT images decoding but incorrect body colors.
+- Parse legacy MXMD packed/streamed texture usage flags and source image names.
+- Prefer BC1 color/usage hints when choosing automatic material albedo; reject BC5 and NRM images in base color slots.
+- Read source Material.color gMatCol (four big-endian floats) and optionally use it instead of forcing all generated material tints to white.
+- Add opt-in unlit Skell Color Diagnostic shader to separate texture, vertex color and material tint contributions.
+- Emit bounded material/link audit diagnostics with format, source name, usage code, selected link and source color.
+- Preserve native Skell HKT bone weights and SkinnedMeshRenderer. No animation changes.
+- Bump ScriptedImporter revision 8. Package/build CI does not verify actual Unity color fidelity.
+
+
 ## 0.8.0 - 2026-11-02
 - Begin Skell texture phase after user confirmed native skin deformation on two v0.7.2 models.
 - Add opt-in GX2 MTXT reader: read referenced packed CAMDO textures and streaming CASMT low/high descriptor tables with their material IDs.
