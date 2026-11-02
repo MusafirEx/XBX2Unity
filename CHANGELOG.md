@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 - 2026-11-02
+- Fix repeated Wii U CAMDO native importer failure: `Unsupported MXMD version: 942080000`.
+- Decode all MXMD v10040 integer metadata (header version, pointers, counts, vertex descriptors and u16 indices) as big-endian, matching xc3_lib's Wii U legacy reader.
+- Preserve big-endian vertex floats, existing mesh import safety checks and placeholder-material behavior.
+- Importer needs Unity Editor reimport after upgrading; real mesh accuracy still requires verification.
+
+
 ## 0.5.0 - 2026-11-02
 - Add experimental pure-C# CAMDO MXMD 10040 native `ScriptedImporter` with Unity mesh sub-assets.
 - Decode static mesh vertex/index references, positions, normals, tangents, UV and vertex colors; create placeholder materials.

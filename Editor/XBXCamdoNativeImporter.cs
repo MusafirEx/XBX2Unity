@@ -225,8 +225,11 @@ namespace MusafirEx.XBX2Unity.Editor
     }
 
     // Format subset: MxmdLegacy 10040, Models, Model, Mesh, VertexData.
-    // The metadata pointers and u16 indices are little-endian; vertex attribute
-    // payloads (float position and UV) are big-endian on Wii U.
+    // Wii U CAMDO MXMD v10040 stores BOTH its metadata/pointers/indices and
+    // vertex attribute payloads in BIG-endian byte order. Unlike later Switch
+    // files, this is not mixed-endian. Confirmed by xc3_lib/src/lib.rs
+    // file_read_impl!(Endian::Big, mxmd::legacy::MxmdLegacy) and the
+    // user's ma9990 logs (00 00 27 38 = 10040, not 942080000).
     internal sealed class LegacyCamdoReader
     {
         public sealed class VertexAttribute
@@ -279,16 +282,19 @@ namespace MusafirEx.XBX2Unity.Editor
                     " fileSize=" + bytes.Length);
         }
         public byte U8(int offset) { Range(offset, 1); return bytes[offset]; }
+        // All integer metadata in Wii U MXMD is BIG-endian.
+        // This includes the version at +4, all relative pointers/counts,
+        // buffer descriptors, attribute type/size and u16 triangle indices.
         public ushort U16(int offset)
         {
             Range(offset, 2);
-            return (ushort)(bytes[offset] | (bytes[offset + 1] << 8));
+            return (ushort)((bytes[offset] << 8) | bytes[offset + 1]);
         }
         public uint U32(int offset)
         {
             Range(offset, 4);
-            return (uint)(bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) |
-                (bytes[offset + 3] << 24));
+            return ((uint)bytes[offset] << 24) | ((uint)bytes[offset + 1] << 16) |
+                   ((uint)bytes[offset + 2] << 8) | bytes[offset + 3];
         }
         private int SafeInt(uint value, string label)
         {
@@ -333,7 +339,8 @@ namespace MusafirEx.XBX2Unity.Editor
                 throw new InvalidDataException("Not an MXMD header.");
             uint version = U32(4);
             if (version != 10040)
-                throw new InvalidDataException("Unsupported MXMD version: " + version + " (expected Wii U 10040).");
+                throw new InvalidDataException("Unsupported MXMD version: " + version +
+                    " (0x" + version.ToString("X8") + "; expected Wii U 10040 / 0x00002738).");
 
             int modelsBase = Relative(0, 8);
             int vertexBase = Relative(0, 20);
