@@ -20,7 +20,7 @@ def contains(src, *needles):
         assert n in src, f"Missing source contract: {n}"
 
 contains(imp,
-    '[ScriptedImporter(13, "camdo")]',
+    '[ScriptedImporter(14, "camdo")]',
     "public bool importSkellNormalMaps = false;",
     "public bool importSkellSpecularMaps = false;",
     "public bool skellLayerPreviewShader = false;",

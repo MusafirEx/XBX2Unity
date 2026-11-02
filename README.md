@@ -44,6 +44,31 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Verified-in-game Skell companion roles for dl099110 (v0.9.3)
+
+Direct visual comparison with the original game on `dl099110` established:
+- **Green (G)** channel of source `*_RGB` = Skell **body part** mask.
+- **Blue (B)** channel of source `*_RGB` = Skell **glowing part** mask.
+- **Red (R)** remains **unknown**, no color rule applied.
+- Audit sampled BC1 alpha was consistently opaque; no verified alpha paint role.
+
+The previous v0.9.1/0.9.2 experimental notion of four independent RGBA paint zones is now deprecated for `dl099110`. This observation is **specific to the tested Skell**, not a validated rule for every model or a full recreation of the original game shader.
+
+### Material > Skell Layer Preview Shader
+
+The new controls are **independent and opt-in**:
+- **Green -> Body Color Tint** (OFF). Set **Skell Body Color**, Body Strength (0–1) and Body Mask Gain (0.1–8) to recolor the mesh where companion Green is present. Default color is white, which leaves the existing base colors unchanged.
+- **Blue -> Glow Emission Preview** (OFF). Set **Skell Glow Color** (HDR capable), Glow Intensity (0–8) and Blue Mask Gain (0.1–8) to visualize where companion Blue emits light. This is additive color in an unlit preview shader, NOT automatically a real scene light or bloom; URP/Built-in postprocessing/HDR are separately required for proper glow.
+- **Layer Debug View** adds **Observed Green – Body Mask**, **Observed Blue – Glow Mask**, and **Observed Body/Glow – Green and Blue Overlay**. They show the unmodified source, even when effect toggles are OFF.
+- The **Legacy Unverified RGBA Experiment** is retained for comparison but is bypassed whenever observed Green/Blue role mapping is enabled. Do not use it to claim four confirmed paint zones.
+
+External `.mat` override assets are **never altered** by import settings. To test generated Layer Preview controls, temporarily clear the relevant material's external override and Apply/Reimport. To use the new effects on an existing editable external `.mat`, manually choose `XBX2Unity/Skell Layer Preview` as that material's shader, assign original source `*_RGB` to `_PaintMask`, and configure the material's exposed G/B channel controls; no automatic mutation of previously extracted material files occurs.
+
+**Test:** `dl099110.camdo` > Material > Import Skell MTXT Textures On > Use Skell Layer Preview Shader On (keep other explicit shader override and old diagnostic shader OFF) > select observed G/B debug views > enable Green Body and adjust body tint > enable Blue Glow and adjust intensity. Report mismatch if G affects non-body areas or B illuminates non-glow regions. Original Skell shader and untested models may have different semantics.
+
+**Verification limit:** CI checks source contracts and package creation, not compilation or visual fidelity in Unity 2022.3.
+
+
 ## Skell RGB companion channel audit (v0.9.2)
 
 The user's Unity log for `dl099110.camdo` reports 28 MTXT textures, 60 vertex-color buffers and 6 source material links to `*_RGB` companions. **This does not establish which mask is used by Skell customization.** Format 49 (BC1) provides RGB but only 1-bit alpha (0 or 255), so assuming four independent RGBA paint gradients is unfounded.

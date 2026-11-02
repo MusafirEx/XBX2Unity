@@ -53,7 +53,7 @@ def main():
 
     assert "public bool skellUseRgbCompanionAsPaintMask = false;" in IMPORTER
     assert "public float skellPaintStrength = 0f;" in IMPORTER
-    assert '[ScriptedImporter(13, "camdo")]' in IMPORTER
+    assert '[ScriptedImporter(14, "camdo")]' in IMPORTER
     assert "XBXSkellPaintChannelAudit.ProfileBc1(raw,width,height)" in DECODER
     assert DECODER.index("ProfileBc1(raw,width,height)") < DECODER.index(
         "tex.Apply(false, true);")

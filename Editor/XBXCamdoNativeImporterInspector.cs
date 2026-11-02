@@ -192,7 +192,10 @@ namespace MusafirEx.XBX2Unity.Editor
                             "Original Mesh Vertex Colors",
                             "RGB Companion - Normalized Channel Dominance",
                             "Base versus RGB Companion - Difference",
-                            "BC1 Companion Alpha - Binary View" });
+                            "BC1 Companion Alpha - Binary View",
+                            "Observed Green - Body Mask (dl099110)",
+                            "Observed Blue - Glow Mask (dl099110)",
+                            "Observed Body/Glow - Green and Blue Overlay" });
                     if (view.intValue == 5 || view.intValue == 6)
                     {
                         var ch = serializedObject.FindProperty("skellMaskChannel");
@@ -204,9 +207,44 @@ namespace MusafirEx.XBX2Unity.Editor
                         "_RGB as Paint Mask. BC1 alpha has only 0/255 values and may be " +
                         "fully opaque; it is not a fourth independent grayscale mask.",
                         MessageType.Info);
+                    EditorGUILayout.Space(6);
+                    EditorGUILayout.LabelField("In-Game Observed Channel Roles (dl099110)",
+                        EditorStyles.boldLabel);
+                    EditorGUILayout.HelpBox(
+                        "Observed against the game: _RGB Green marks the body and Blue " +
+                        "marks luminous parts on dl099110. Red remains unidentified. " +
+                        "These opt-in preview controls are NOT a reconstructed original " +
+                        "Skell lighting shader and are not assumed true for every model.",
+                        MessageType.Info);
+                    EditorGUILayout.PropertyField(
+                        serializedObject.FindProperty("skellUseObservedGreenBody"),
+                        new GUIContent("Green -> Body Color Tint"));
+                    if (serializedObject.FindProperty("skellUseObservedGreenBody").boolValue)
+                    {
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellBodyColor"));
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellBodyStrength"));
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellBodyMaskGain"));
+                    }
+                    EditorGUILayout.PropertyField(
+                        serializedObject.FindProperty("skellUseObservedBlueGlow"),
+                        new GUIContent("Blue -> Glow Emission Preview"));
+                    if (serializedObject.FindProperty("skellUseObservedBlueGlow").boolValue)
+                    {
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellGlowColor"));
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellGlowIntensity"));
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellGlowMaskGain"));
+                        EditorGUILayout.HelpBox(
+                            "Blue glow is an additive unlit preview. True emissive lighting / bloom " +
+                            "requires compatible HDR rendering and post-processing.",
+                            MessageType.Info);
+                    }
+                    EditorGUILayout.Space(5);
+                    EditorGUILayout.LabelField("Legacy Unverified RGBA Experiment",
+                        EditorStyles.boldLabel);
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("skellUseRgbCompanionAsPaintMask"),
                         new GUIContent("Interpret _RGB as Paint Mask (Unverified)",
-                            "OFF by default. Source *_RGB may not be an RGBA paint-zone mask."));
+                            "OFF by default. Superseded by observed Green=Body, Blue=Glow " +
+                            "on dl099110. Legacy effect is bypassed when either observed role is enabled."));
                     if (serializedObject.FindProperty("skellUseRgbCompanionAsPaintMask").boolValue)
                     {
                         EditorGUILayout.PropertyField(serializedObject.FindProperty("skellPaintStrength"));
