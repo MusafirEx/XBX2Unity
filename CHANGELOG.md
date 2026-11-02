@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.1 - 2026-11-03
+- Extend v0.9.0 MXMD material manifest after the user confirmed external .mat overrides remain persistent after reimport.
+- Resolve texture roles by source MXMD per-material IDs and name/BCn cues: BC5 NRM, BC1 SPM, BC1 RFM/REF, BC1 GLO/GLW and BC1 *_RGB companion (paint meaning unverified). Add independent role slot indices and readable role labels in the Material Inspector.
+- Add opt-in "Bind BC5 Normal Candidates" and "Bind SPM Specular Candidates" for **generated** Unity material previews, using available shader _BumpMap/_NormalMap and _SpecGlossMap properties. Explicit normal/spec binding is OFF by default; no changes to user-owned external .mat files.
+- Add optional unlit XBX2Unity/Skell Layer Preview shader to visualize base color, BC5 normal channels, SPM specular image, and raw *_RGB companion candidate. This is diagnostic, not the native Wii U illumination model.
+- Provide a strictly opt-in experiment to interpret RGBA from *_RGB companion as four paint zones. All four paint colors default white, paint strength 0, and mask interpretation OFF until manually enabled. Do not claim real Skell paint zones are proven.
+- Keep source reflection and glow texture roles visible as metadata only, without guessing their shader bindings.
+- Bump CAMDO ScriptedImporter revision to 12. Preserve v0.9.0 material overrides/extraction, verified texture mapping and bone weights. Animation remains a later phase.
+- Add role fixtures/contract tests and build packaging for new C# class and shader. GitHub CI is not a Unity shader/compiler test.
+
+
 ## 0.9.0 - 2026-11-02
 - Adopt reusable Unity material workflow patterns from MusafirEx/EMD2Unity, MusafirEx/Unity-CnC-SAGE-Tools (W3X/W3D), and MusafirEx/Bress2Unity without copying their game-format assumptions.
 - Add XBXMaterialManifest per CAMDO import, carrying stable MXMD material index, source color, original texture-slot IDs, decoded MTXT names/formats/usage hints, selected albedo slot, associated generated material, assigned material and renderer count.

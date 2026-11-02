@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(11, "camdo")]
+    [ScriptedImporter(12, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -48,7 +48,23 @@ namespace MusafirEx.XBX2Unity.Editor
         [Tooltip("Use an unlit diagnostic shader to examine base texture, source vertex color and gMatCol.")]
         public bool skellColorDiagnosticShader = false;
         public bool skellUseVertexColor = false;
+
         [Range(0, 5)] public int skellDebugView = 0;
+        [Header("Skell Layer Import (Experimental)")]
+        [Tooltip("Opt-in: BC5 NRM to generated _BumpMap/_NormalMap. Does not touch external .mat.")]
+        public bool importSkellNormalMaps = false;
+        [Tooltip("Opt-in: BC1 SPM to generated _SpecGlossMap. Shader-dependent.")]
+        public bool importSkellSpecularMaps = false;
+        [Tooltip("Choose unlit Skell Layer Preview for native texture role diagnostics and experimental four-zone paint.")]
+        public bool skellLayerPreviewShader = false;
+        [Tooltip("Experimental: treat source _RGB companion as RGBA four-zone mask, NOT confirmed in-game format.")]
+        public bool skellUseRgbCompanionAsPaintMask = false;
+        [Range(0f, 1f)] public float skellPaintStrength = 0f;
+        public Color skellPaintColor1 = Color.white;
+        public Color skellPaintColor2 = Color.white;
+        public Color skellPaintColor3 = Color.white;
+        public Color skellPaintColor4 = Color.white;
+        [Range(0, 4)] public int skellLayerDebugView = 0;
         [Header("Extracted Map Textures")]
         public bool bindExtractedTextures = true;
         [Range(0, 15)] public int baseTextureSlot = 0;
@@ -180,11 +196,22 @@ namespace MusafirEx.XBX2Unity.Editor
                             sourceTexture.decodedFormat = decoded.format == 49 ? "GX2 BC1" :
                                 decoded.format == 53 ? "GX2 BC5" : decoded.format.ToString();
                             sourceTexture.decodedTexture = decoded.texture;
+                            sourceTexture.inferredRole = XBXSkellMaterialLayers.Describe(decoded);
                             if (slot == 0 && !string.IsNullOrEmpty(decoded.sourceName))
                                 entry.sourceName = decoded.sourceName;
                         }
                         entry.textureSlots.Add(sourceTexture);
                     }
+                    entry.normalCandidateSlot = XBXSkellMaterialLayers.Find(
+                        materialSource.textureIndices, skellMtxt, XBXSkellMaterialLayers.Role.Normal).slot;
+                    entry.specularCandidateSlot = XBXSkellMaterialLayers.Find(
+                        materialSource.textureIndices, skellMtxt, XBXSkellMaterialLayers.Role.Specular).slot;
+                    entry.reflectionCandidateSlot = XBXSkellMaterialLayers.Find(
+                        materialSource.textureIndices, skellMtxt, XBXSkellMaterialLayers.Role.Reflection).slot;
+                    entry.glowCandidateSlot = XBXSkellMaterialLayers.Find(
+                        materialSource.textureIndices, skellMtxt, XBXSkellMaterialLayers.Role.Glow).slot;
+                    entry.rgbCompanionSlot = XBXSkellMaterialLayers.Find(
+                        materialSource.textureIndices, skellMtxt, XBXSkellMaterialLayers.Role.RgbCompanion).slot;
                     manifest.entries.Add(entry);
                 }
                 ctx.AddObjectToAsset("xbx_material_manifest", manifest);
@@ -219,6 +246,7 @@ namespace MusafirEx.XBX2Unity.Editor
                 }
                 Dictionary<int, Material> materials = new Dictionary<int, Material>();
                 int boundBaseTextures = 0, boundBlendTextures = 0, boundSkellTextures = 0;
+                int skellNormalBound = 0, skellSpecularBound = 0, skellPaintCandidateBound = 0;
                 int blockedNormalAsColor = 0, unmatchedSkellMaterials = 0;
                 int skellMaterialsDiagnosed = 0;
                 int meshHasVBlend = 0, meshHasVertexColor = 0, meshHasUv1 = 0, meshNoVBlend = 0;
@@ -352,6 +380,17 @@ namespace MusafirEx.XBX2Unity.Editor
                                         AssetDatabase.LoadAssetAtPath<Shader>(diagnosticPath) != null)
                                         ctx.DependsOnSourceAsset(diagnosticPath);
                                 }
+                                if (shader == null && importSkellMtxtTextures && skellLayerPreviewShader)
+                                {
+                                    const string layerShaderPath =
+                                        "Packages/com.musafirex.xbx2unity/Runtime/Shaders/XBXSkellLayerPreview.shader";
+                                    shader = AssetDatabase.LoadAssetAtPath<Shader>(layerShaderPath) ??
+                                        Shader.Find("XBX2Unity/Skell Layer Preview");
+                                    if (shader == null)
+                                        ctx.LogImportWarning("Skell Layer Preview shader missing; use Lit fallback.");
+                                    else if (AssetDatabase.LoadAssetAtPath<Shader>(layerShaderPath) != null)
+                                        ctx.DependsOnSourceAsset(layerShaderPath);
+                                }
                                 if (shader == null)
                                     shader = FindPipelineShader();
                                 if (shader == null) throw new InvalidDataException("No supported material shader is available.");
@@ -428,6 +467,52 @@ namespace MusafirEx.XBX2Unity.Editor
                                             if (mat.HasProperty("_MainTex"))
                                                 mat.SetTexture("_MainTex", selected.texture);
                                             boundSkellTextures++;
+                                        }
+                                    }
+                                    // Role discovery uses original per-material MXMD
+                                    // texture references. It does not mutate an external .mat.
+                                    var normalCandidate = XBXSkellMaterialLayers.Find(
+                                        ids, skellMtxt, XBXSkellMaterialLayers.Role.Normal);
+                                    var specCandidate = XBXSkellMaterialLayers.Find(
+                                        ids, skellMtxt, XBXSkellMaterialLayers.Role.Specular);
+                                    var rgbCandidate = XBXSkellMaterialLayers.Find(
+                                        ids, skellMtxt, XBXSkellMaterialLayers.Role.RgbCompanion);
+                                    if (importSkellNormalMaps &&
+                                        XBXSkellMaterialLayers.AssignNormal(mat, normalCandidate))
+                                        skellNormalBound++;
+                                    if (importSkellSpecularMaps &&
+                                        XBXSkellMaterialLayers.AssignSpecular(mat, specCandidate))
+                                        skellSpecularBound++;
+                                    if (shader.name == "XBX2Unity/Skell Layer Preview")
+                                    {
+                                        if (mat.HasProperty("_UseNormalMap"))
+                                            mat.SetFloat("_UseNormalMap",
+                                                importSkellNormalMaps && normalCandidate.IsValid ? 1f : 0f);
+                                        if (mat.HasProperty("_UseSpecularMap"))
+                                            mat.SetFloat("_UseSpecularMap",
+                                                importSkellSpecularMaps && specCandidate.IsValid ? 1f : 0f);
+                                        if (mat.HasProperty("_ViewMode"))
+                                            mat.SetFloat("_ViewMode", skellLayerDebugView);
+                                        if (mat.HasProperty("_PaintStrength"))
+                                            mat.SetFloat("_PaintStrength", skellPaintStrength);
+                                        if (mat.HasProperty("_PaintColor1"))
+                                            mat.SetColor("_PaintColor1", skellPaintColor1);
+                                        if (mat.HasProperty("_PaintColor2"))
+                                            mat.SetColor("_PaintColor2", skellPaintColor2);
+                                        if (mat.HasProperty("_PaintColor3"))
+                                            mat.SetColor("_PaintColor3", skellPaintColor3);
+                                        if (mat.HasProperty("_PaintColor4"))
+                                            mat.SetColor("_PaintColor4", skellPaintColor4);
+                                        if (mat.HasProperty("_UseVertexColor"))
+                                            mat.SetFloat("_UseVertexColor", skellUseVertexColor ? 1f : 0f);
+                                        bool useCandidate = skellUseRgbCompanionAsPaintMask &&
+                                            rgbCandidate.IsValid && mat.HasProperty("_PaintMask");
+                                        if (mat.HasProperty("_UsePaintMask"))
+                                            mat.SetFloat("_UsePaintMask", useCandidate ? 1f : 0f);
+                                        if (useCandidate)
+                                        {
+                                            mat.SetTexture("_PaintMask", rgbCandidate.texture.texture);
+                                            skellPaintCandidateBound++;
                                         }
                                     }
                                     if (selected == null) unmatchedSkellMaterials++;
@@ -547,6 +632,9 @@ namespace MusafirEx.XBX2Unity.Editor
                     ctx.LogImportWarning("Native geometry preview: " + imported + " draw calls, " +
                         geometryCache.Count + " unique meshes. Bound extracted base textures: " +
                         boundBaseTextures + ", native Skell material textures: " + boundSkellTextures +
+                        ", Skell BC5 normals bound: " + skellNormalBound +
+                        ", Skell SPM maps bound: " + skellSpecularBound +
+                        ", experimental RGB mask candidates bound: " + skellPaintCandidateBound +
                         ", experimental blended materials: " + boundBlendTextures +
                         ", skipped normal-map albedo selections: " + blockedNormalAsColor +
                         ", Skell materials without color image: " + unmatchedSkellMaterials +

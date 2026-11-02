@@ -38,6 +38,7 @@ INCLUDE = (
     "Editor/XBXSkellMtxt.cs", "Editor/XBXSkellMtxt.cs.meta",
     "Editor/XBXMaterialManifest.cs", "Editor/XBXMaterialManifest.cs.meta",
     "Editor/XBXMaterialInspectorUI.cs", "Editor/XBXMaterialInspectorUI.cs.meta",
+    "Editor/XBXSkellMaterialLayers.cs", "Editor/XBXSkellMaterialLayers.cs.meta",
     "Editor/XBX2UnityCPKWindow.cs", "Editor/XBX2UnityCPKWindow.cs.meta",
     "Editor/MusafirEx.XBX2Unity.Editor.asmdef",
     "Editor/MusafirEx.XBX2Unity.Editor.asmdef.meta",
@@ -46,6 +47,8 @@ INCLUDE = (
     "Runtime/Shaders/XBXMapVertexBlend.shader.meta",
     "Runtime/Shaders/XBXSkellColorDiagnostic.shader",
     "Runtime/Shaders/XBXSkellColorDiagnostic.shader.meta",
+    "Runtime/Shaders/XBXSkellLayerPreview.shader",
+    "Runtime/Shaders/XBXSkellLayerPreview.shader.meta",
 )
 
 
@@ -115,12 +118,14 @@ def main() -> None:
         f"{PREFIX}/Editor/XBXSkellMtxt.cs": "Editor/XBXSkellMtxt.cs",
         f"{PREFIX}/Editor/XBXMaterialManifest.cs": "Editor/XBXMaterialManifest.cs",
         f"{PREFIX}/Editor/XBXMaterialInspectorUI.cs": "Editor/XBXMaterialInspectorUI.cs",
+        f"{PREFIX}/Editor/XBXSkellMaterialLayers.cs": "Editor/XBXSkellMaterialLayers.cs",
         f"{PREFIX}/Editor/XBX2UnityCPKWindow.cs": "Editor/XBX2UnityCPKWindow.cs",
         f"{PREFIX}/Editor/MusafirEx.XBX2Unity.Editor.asmdef": "Editor/MusafirEx.XBX2Unity.Editor.asmdef",
         f"{PREFIX}/Runtime": None,
         f"{PREFIX}/Runtime/Shaders": None,
         f"{PREFIX}/Runtime/Shaders/XBXMapVertexBlend.shader": "Runtime/Shaders/XBXMapVertexBlend.shader",
         f"{PREFIX}/Runtime/Shaders/XBXSkellColorDiagnostic.shader": "Runtime/Shaders/XBXSkellColorDiagnostic.shader",
+        f"{PREFIX}/Runtime/Shaders/XBXSkellLayerPreview.shader": "Runtime/Shaders/XBXSkellLayerPreview.shader",
         f"{PREFIX}/README.md": "README.md",
         f"{PREFIX}/LICENSE.md": "LICENSE.md",
         f"{PREFIX}/CHANGELOG.md": "CHANGELOG.md",

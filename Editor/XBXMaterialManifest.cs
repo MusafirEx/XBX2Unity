@@ -16,6 +16,7 @@ namespace MusafirEx.XBX2Unity.Editor
         public string sourceName;
         public string usageHint;
         public string decodedFormat;
+        public string inferredRole;
         public Texture2D decodedTexture;
     }
 
@@ -28,6 +29,11 @@ namespace MusafirEx.XBX2Unity.Editor
         public int rendererCount;
         public Color sourceColor = Color.white;
         public int chosenAlbedoSlot = -1;
+        public int normalCandidateSlot = -1;
+        public int specularCandidateSlot = -1;
+        public int reflectionCandidateSlot = -1;
+        public int glowCandidateSlot = -1;
+        public int rgbCompanionSlot = -1;
         public string bindingStatus;
         public Material generatedMaterial;
         public Material assignedMaterial;
