@@ -213,8 +213,11 @@ namespace MusafirEx.XBX2Unity.Editor
             if (tile == 2)
                 return 64*blockSize * (x/8 + (y/8)*(pitch/8)) + elem;
             int pipe = ((y>>3)&1) ^ ((x>>4)&1);
-            int bank = (((y>>4)&1) ^ ((x>>3)&1)) |
-                ((((y>>3)&1) ^ ((x>>4)&1)) << 1);
+            // addrlib uses ty=y/numPipes (2), not y itself.
+            // bank0 = ty4 ^ x3 = y5 ^ x3;
+            // bank1 = ty3 ^ x4 = y4 ^ x4.
+            int bank = (((y>>5)&1) ^ ((x>>3)&1)) |
+                ((((y>>4)&1) ^ ((x>>4)&1)) << 1);
             int bankPipe = pipe + 2*bank;
             bankPipe ^= ((swizzle>>8)&1) + 2*((swizzle>>9)&3);
             bankPipe &= 7;
