@@ -73,19 +73,38 @@ namespace MusafirEx.XBX2Unity.Editor
                 if (serializedObject.FindProperty("importSkellMtxtTextures").boolValue)
                 {
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("maxSkellTextures"));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("autoSelectSkellColorTexture"));
+                    if (!serializedObject.FindProperty("autoSelectSkellColorTexture").boolValue)
+                        EditorGUILayout.HelpBox(
+                            "Manual mode uses Base Texture Slot below. A source " +
+                            "BC5/NRM texture will NEVER be assigned as base color.",
+                            MessageType.Warning);
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("useSkellMaterialColor"));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("skellColorDiagnosticShader"));
+                    if (serializedObject.FindProperty("skellColorDiagnosticShader").boolValue)
+                    {
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellUseVertexColor"));
+                        var debug = serializedObject.FindProperty("skellDebugView");
+                        debug.intValue = EditorGUILayout.Popup("Skell Debug View",
+                            debug.intValue, new[] {
+                                "Composite (texture x material x optional vertex)",
+                                "Raw Color Texture",
+                                "Source Vertex Color",
+                                "Source gMatCol" });
+                    }
                     EditorGUILayout.HelpBox(
-                        "Loads BC1/BC5 MTXT base mipmaps from CAMDO/CASMT using GX2 " +
-                        "tileMode 2/4 deswizzle. Binds selected MXMD material texture index. " +
-                        "Packed/streamed materials may need additional role mapping. " +
-                        "This is a preview, not the final original Skell shader.",
-                        MessageType.Warning);
+                        "Auto mode chooses a source BC1 color texture by the original " +
+                        "MXMD usage hint (COL/RGB, etc.). BC5/NRM data are not placed " +
+                        "in the albedo slot. Source gMatCol is optional. The diagnostic " +
+                        "shader can preview vertex colors independently. " +
+                        "Check the Console material-to-texture audit after Reimport. " +
+                        "The real Skell multi-pass shader is still unknown.",
+                        MessageType.Info);
                 }
-                EditorGUILayout.HelpBox(
-                    "Skell chr_dl textures are MTXT GX2 surfaces in CAMDO/CASMT. " +
-                    "Unlike extracted map PNGs, they are not yet deswizzled/decoded " +
-                    "by this native importer. Audit the MTXT header/format before " +
-                    "implementing BCn surface decompression.",
-                    MessageType.Info);
+                else
+                    EditorGUILayout.HelpBox(
+                        "Enable Import Skell MTXT Textures to read BC1/BC5 base mips " +
+                        "directly from CAMDO/CASMT.", MessageType.Info);
                 if (GUILayout.Button("Audit Skell MTXT Textures"))
                     XBXSkellResourceAudit.RunSelected();
                 EditorGUILayout.Space(4);
