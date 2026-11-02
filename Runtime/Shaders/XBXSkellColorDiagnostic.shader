@@ -52,10 +52,10 @@ Shader "XBX2Unity/Skell Color Diagnostic"
             float2 gridCoord = i.uv * 12.0;
             float parity = frac((floor(gridCoord.x) + floor(gridCoord.y)) * 0.5) * 2.0;
             float2 cell = frac(gridCoord);
-            float line = 1.0 - step(0.055, min(cell.x, cell.y));
+            float gridLineWeight = 1.0 - step(0.055, min(cell.x, cell.y));
             return fixed4(lerp(float3(0.18, 0.18, 0.18),
-                float3(0.85, 0.85, 0.85), parity) * (1.0 - line) +
-                float3(0.9, 0.2, 0.1) * line, 1.0);
+                float3(0.85, 0.85, 0.85), parity) * (1.0 - gridLineWeight) +
+                float3(0.9, 0.2, 0.1) * gridLineWeight, 1.0);
         }
         fixed4 tinted = tex * _Color;
         if (_UseVertexColor > 0.5)

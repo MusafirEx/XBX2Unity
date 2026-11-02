@@ -54,6 +54,16 @@ def main() -> None:
     assert correct in decoder, "Native C# GX2 pipe coordinate must use x3."
     assert wrong not in decoder, "Old broken GX2 pipe computation remains."
 
+    # Prevent the Unity 2022.3 d3d11 shader regression from v0.8.2.
+    # HLSL reserves 'line' as a keyword; using it as a variable broke
+    # XBX2Unity/Skell Color Diagnostic at lines 56, 58 and 59.
+    shader = (root / "Runtime" / "Shaders" /
+              "XBXSkellColorDiagnostic.shader").read_text(encoding="utf-8")
+    assert "float line =" not in shader, "HLSL reserved identifier 'line' reintroduced."
+    assert "float gridLineWeight =" in shader
+    assert shader.count("gridLineWeight") == 3
+
+
     expected = (
         ((0, 0, 64, 8, 0), 0),
         ((8, 0, 64, 8, 0), 768),

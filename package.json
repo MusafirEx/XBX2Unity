@@ -1,6 +1,6 @@
 {
   "name": "com.musafirex.xbx2unity",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "displayName": "XBX2Unity - Xenoblade X Wii U Native CAMDO Tools",
   "description": "Native Wii U CAMDO/CASMT importer with Skell skinning, GX2 MTXT textures, source usage-aware color selection, and material tint diagnostics.",
   "unity": "2022.3",
