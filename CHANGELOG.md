@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 - 2026-11-02
+- Add experimental pure-C# CAMDO MXMD 10040 native `ScriptedImporter` with Unity mesh sub-assets.
+- Decode static mesh vertex/index references, positions, normals, tangents, UV and vertex colors; create placeholder materials.
+- Add native importer Inspector with Model, Rig, Animation and Material tabs, accurately identifying unsupported features.
+- Preserve the optional external xc3_gltf model viewer as fallback; no glTFast dependency required for native importer.
+- Add native importer to GitHub Actions UPM ZIP and `.unitypackage` builds.
+
+
 ## 0.4.0 - 2026-11-02
 - Add CAMDO Model Viewer editor window with single-file and bounded batch conversion to GLB.
 - Use external `xc3_gltf.exe` converter (from ScanMountGoat/xc3_lib) to read extracted Wii U CAMDO/CASMT model pairs.

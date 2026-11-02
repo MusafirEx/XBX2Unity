@@ -13,9 +13,31 @@ https://github.com/MusafirEx/XBX2Unity.git#feature/unity-map-extractor-package
 Alternatively import the `.unitypackage` from the GitHub Actions build artifact.
 
 
-## Preview Wii U CAMDO models directly in Unity (v0.4.0)
+## Native CAMDO importer (experimental v0.5.0, no GLTF conversion required)
 
-This workflow **does not require Blender**. It uses the external [xc3_gltf](https://github.com/ScanMountGoat/xc3_lib/tree/main/xc3_gltf) program to convert Wii U `.camdo` models into a GLB, then lets [Unity glTFast](https://docs.unity3d.com/Packages/com.unity.cloud.gltfast@latest) import it into the Project as a previewable, placeable model. This is a conversion workflow rather than a native binary CAMDO `ScriptedImporter`.
+XBX2Unity now includes **XBXCamdoNativeImporter**, a pure C# Unity 2022.3 `ScriptedImporter` for `.camdo` files from **Wii U Xenoblade Chronicles X** using the `MXMD` `10040` format. It follows the same basic Editor/import asset workflow as [EMD2Unity](https://github.com/MusafirEx/EMD2Unity) and [Bress2Unity](https://github.com/MusafirEx/Bress2Unity).
+
+**Workflow:** select `Assets/XBX/ma9990/terrain/0.camdo`, let Unity import it automatically, then click the asset to preview the generated `GameObject` and mesh sub-assets in Inspector, or drag it into Scene. You do **not** need `xc3_gltf.exe`, glTFast, Blender, GLB or FBX for this workflow.
+
+- Reads `MXMD` version `10040` from CAMDO with checked little-endian metadata offsets/pointers.
+- Reads Wii U big-endian Float32 vertex positions and TexCoord attributes.
+- Reads normal and tangent bytes, optional vertex color, 16-bit triangle indices, mesh draw/material references.
+- Builds `MeshFilter`, `MeshRenderer`, `Mesh`, and placeholder `Material` Unity sub-assets.
+- Preserves shared mesh data for repeated vertex/index buffer references; optional X mirror and triangle winding adjustment.
+- Companion `.casmt` path is tracked as an asset import dependency where present. **CASMT texture decoding is not implemented**.
+- Inspector tabs: **Model** (working static-mesh options), **Rig** (not yet supported), **Animation** (not yet supported), **Material** (placeholder settings only).
+- Bounded, validated pointers and file/model/mesh/index counts. Invalid/unsupported content reports a Unity import error rather than inventing geometry.
+- Retains the separate **CAMDO Model Viewer** GLB-based tool from v0.4.0 as an optional fallback for unsupported native import cases.
+
+### Coverage limitations
+
+**This is an initial native geometry decoder, not a verified complete importer.** It has not yet been compiled/tested against the user's `ma9990` file bytes on a connected Unity Editor. Complex material shader/texture binding, game-specific instance transforms, skeletal skinning, animations, compressed variants and all non-triangle primitives need more work. Some models may appear gray, mirrored or invisible until these details are validated.
+
+Implementation is an independent C# adaptation of public format descriptions in the MIT-licensed [xc3_lib](https://github.com/ScanMountGoat/xc3_lib) (particularly `xc3_lib/src/mxmd/legacy.rs` and `xc3_model/src/vertex.rs`). The repository includes no copied third-party binaries or copyrighted game assets.
+
+## Optional GLB conversion for Wii U CAMDO models (v0.4.0)
+
+This legacy/fallback workflow **does not require Blender** but is optional; for direct native import, see the v0.5.0 section above. It uses the external [xc3_gltf](https://github.com/ScanMountGoat/xc3_lib/tree/main/xc3_gltf) program to convert Wii U `.camdo` models into a GLB, then lets [Unity glTFast](https://docs.unity3d.com/Packages/com.unity.cloud.gltfast@latest) import it into the Project as a previewable, placeable model. This is a conversion workflow rather than a native binary CAMDO `ScriptedImporter`.
 
 1. Download the Windows `xc3_lib_win_x64.zip` from [xc3_lib releases](https://github.com/ScanMountGoat/xc3_lib/releases). Extract it and locate **xc3_gltf.exe**. Do not choose `casmExtract.exe` or `XenobladeToolset.exe`.
 2. In Unity Package Manager, install **com.unity.cloud.gltfast** if it is not installed. The RTS Unity project already had it installed at version 6.14.1 in the previously inspected manifest.
