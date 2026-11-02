@@ -26,6 +26,24 @@ After testing the map textures in Unity, the Editor.log showed many `CAMDO textu
 
 **Reimport one** `Assets/XBX/ma9990/terrain/0.camdo` after updating; validate new counts and actual texture mapping before bulk-reimport. This fixes the known material stride defect; it does **not** fix the separate terrainLOD/3, terrainLOD/4 or Skybox0 geometry variants.
 
+## Edge blending diagnostics and preview controls (v0.6.2)
+
+**Observed Unity log:** `terrain/1.camdo` imported **5,602 mesh draw calls** and bound **525 base material textures**, but reported **0 experimentally blended materials**. This occurs when the blending toggle is disabled (default) or when the second selected texture slot does not resolve.
+
+To test the source terrain mask rather than guessing:
+
+1. Update from `main`, select `Assets/XBX/ma9990/terrain/1.camdo` and open **Material**.
+2. Enable **Experimental Edge Blend**. Start with **Mask Source = vBlend Attribute (14)**, **Mask Channel = Red**, **Blend Texture Slot = 1** and **Debug Preview = Raw Mask (grayscale)**.
+3. Apply changes, then examine the model. Black/white everywhere means that channel may be absent or nearly constant. Switch to **vBlend RGB**, then inspect Green, Blue or Alpha, or try **Vertex Color RGBA** / **Base Texture RGBA** / **Overlay Texture RGBA** for diagnostic comparisons.
+4. Use **Debug Preview = Overlay Texture Only** to verify that the second linked texture is actually an albedo/diffuse layer. A normal or packed data texture is *not* an appropriate overlay.
+5. For a valid two-color-layer pair and variable mask, set **Debug Preview = Composite**, then adjust Threshold, Softness and Invert Mask. If the second image needs distinct UVs, choose **Overlay UV = UV1**.
+6. Use **Tools > XBX2Unity > Inspect Selected CAMDO Blend Data** (or right-click the CAMDO asset > XBX2Unity > Inspect CAMDO Blend Data). It produces `XBX_Exports/BlendAudits/XBX_ma9990_terrain_1.camdo.blend.txt` with mesh UV3 mask min/max, counts of variable vBlend, vertex color/UV1 presence, and sample material base/overlay names.
+
+**Important:** All these blend modes are experiments to identify original vertex/texture controls. They do **not** reproduce the exact original Xenoblade X terrain shader. Source material slot 1 might be a normal map or packed mask, and many meshes may not carry type-14 vBlend. The source mask and overlay texture must be verified visually before relying on the result.
+
+The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
+
+
 ## Native map textures & experimental edge blending (v0.6.0)
 
 **No glTF conversion**. The native \`.camdo\` ScriptedImporter now also reads Wii U MXMD v10040 **material texture links** and **external texture mapping records**, then binds the extracted textures located under the same stage's \`textures/\` directory. The optional **Map Vertex Blend** shader uses the source \`vBlend\` attribute (type 14, UNorm8x4) for a two-layer edge-blend preview.

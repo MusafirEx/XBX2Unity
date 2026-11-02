@@ -53,14 +53,38 @@ namespace MusafirEx.XBX2Unity.Editor
                 if (serializedObject.FindProperty("enableExperimentalEdgeBlend").boolValue)
                 {
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("blendTextureSlot"));
-                    EditorGUILayout.PropertyField(serializedObject.FindProperty("blendChannel"));
+                    EditorGUILayout.Space(3);
+                    EditorGUILayout.LabelField("Diagnostic Mask Preview", EditorStyles.boldLabel);
+                    var mask = serializedObject.FindProperty("blendMaskSource");
+                    mask.intValue = EditorGUILayout.Popup("Mask Source", mask.intValue,
+                        new[] { "vBlend Attribute (14)", "Vertex Color RGBA", "Base Texture RGBA",
+                            "Overlay Texture RGBA", "Constant Blend Weight" });
+                    var channel = serializedObject.FindProperty("blendChannel");
+                    channel.intValue = EditorGUILayout.Popup("Mask Channel", channel.intValue,
+                        new[] { "Red", "Green", "Blue", "Alpha" });
+                    var uv = serializedObject.FindProperty("overlayUVSet");
+                    uv.intValue = EditorGUILayout.Popup("Overlay UV", uv.intValue,
+                        new[] { "UV0", "UV1 (if present)" });
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("invertBlendMask"));
+                    if (mask.intValue == 4)
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty("constantBlendWeight"));
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("blendThreshold"));
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("blendSoftness"));
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("useVertexTint"));
+                    var view = serializedObject.FindProperty("blendDebugView");
+                    view.intValue = EditorGUILayout.Popup("Debug Preview", view.intValue,
+                        new[] { "Composite", "Raw Mask (grayscale)", "Blend Weight (grayscale)",
+                            "Base Texture Only", "Overlay Texture Only", "vBlend RGB" });
                     EditorGUILayout.HelpBox(
-                        "Blend is an experimental 2-layer unlit preview using source vertex vBlend (type 14). " +
-                        "The second material texture slot may be a normal/lookup map rather than a diffuse layer. " +
-                        "Check textures before enabling. Original Wii U edge compositing is not reproduced.",
+                        "Start with Debug Preview = Raw Mask. If it is all black or all white, try " +
+                        "another vBlend channel or a different Mask Source. Inspect the texture " +
+                        "slot mapping; a second slot can be a normal/lookup map, not diffuse.",
+                        MessageType.Info);
+                    if (GUILayout.Button("Inspect Selected CAMDO Blend Channels"))
+                        XBXCamdoBlendAudit.RunSelected();
+                    EditorGUILayout.HelpBox(
+                        "Original XCX terrain material layering has NOT been reconstructed. " +
+                        "This mode visualizes source attributes and tests two texture layers only.",
                         MessageType.Warning);
                 }
             }

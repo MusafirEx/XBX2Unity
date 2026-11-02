@@ -1,8 +1,8 @@
 {
   "name": "com.musafirex.xbx2unity",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "displayName": "XBX2Unity - Xenoblade X Wii U Native CAMDO Tools",
-  "description": "Native Wii U CAMDO/CASMT map importer with indexed extracted texture binding, experimental vBlend edge blending, and archive extraction tools.",
+  "description": "Native XCX Wii U CAMDO/CASMT map importer with extracted texture binding, multi-source edge mask diagnostics and experimental two-layer preview shader.",
   "unity": "2022.3",
   "keywords": [
     "xenoblade",
