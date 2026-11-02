@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.1 - 2026-11-02
+- Fix `MXMDMaterial_V1` array stride: 136 bytes, not 132. Confirmed with PredatorCZ/XenoLib legacy C++ layout.
+- Prevent material-to-material pointer drift into float values such as `0x3F000000` observed in the user's `ma9990` Editor.log.
+- Add material index, record address, base address, texture offset, link count, array count and file size to invalid-material pointer errors.
+- Preserve successfully generated CAMDO/CASMT mesh geometry when material metadata is incomplete. Separate terrainLOD/Skybox decoder variants remain unsupported.
+- Reimport a single CAMDO to verify texture binding; packaging CI is not Unity model validation.
+
+
 ## 0.6.0 - 2026-11-02
 - Parse MXMD legacy material texture links and map external texture references (cached container / uncached global mapping).
 - Resolve extracted stage PNG/DDS/TGA by exact container/id paths, bind base textures into native Unity Materials, and track imported texture dependencies.
