@@ -31,11 +31,22 @@ namespace MusafirEx.XBX2Unity.Editor
             {
                 EditorGUILayout.LabelField("Skell HKT Skeleton", EditorStyles.boldLabel);
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("importSkellHktHierarchy"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("importSkellBoneWeights"));
+                if (serializedObject.FindProperty("importSkellBoneWeights").boolValue)
+                    EditorGUILayout.HelpBox(
+                        "Experimental Skell skinning: links MXMD WeightIndex with shared " +
+                        "SkinWeights2/BoneIndices2 and matches MXMD bone names to HKT. " +
+                        "Only validated meshes become SkinnedMeshRenderer; all others " +
+                        "retain their original static MeshRenderer. Check Console counts.",
+                        MessageType.Warning);
+                if (GUILayout.Button("Audit Skell Bone Weights / MXMD Palette"))
+                    XBXSkellWeightAudit.RunSelected();
                 EditorGUILayout.HelpBox(
                     "For Skell CAMDO, reads the sibling *_rig.hkt and builds the native " +
                     "Havok bone hierarchy/Transform nodes. Geometry remains static until " +
-                    "weight palettes, bone weights and bindposes are verified. " +
-                    "This is a skeleton preview, NOT a working SkinnedMeshRenderer.",
+                    "weight palettes, bone weights and bindposes are individually validated. " +
+                    "Enable the experimental bone weights option to create skinned meshes. " +
+                    "Some mesh groups may still use static renderers.",
                     MessageType.Warning);
                 if (GUILayout.Button("Audit Selected Skell HKT / Resources"))
                     XBXSkellResourceAudit.RunSelected();

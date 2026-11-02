@@ -44,6 +44,30 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell bone weights and SkinnedMeshRenderer preview (v0.7.1)
+
+**Requested priority:** bone/weight/rig first, then **Skell texture decoding**, then **animation decoding**. v0.7.1 only changes the bone phase.
+
+The new **Rig > Import Skell Bone Weights** option (OFF by default) tries to convert a draw call from static MeshRenderer to SkinnedMeshRenderer using original Wii U MXMD skin metadata:
+
+- \`WeightIndex\` and \`WeightIndex2\` attributes (types **3/4**, Uint16x2) in a vertex buffer reference a row in a shared weight buffer.
+- \`SkinWeights2\` (type **1**, Float32x3 with 4th component reconstructed) and \`BoneIndices2\` (type **2**, Uint8x4) are stored in separate shared vertex buffers.
+- Legacy VertexData contains six weight buffer selector indices. Selected buffers are determined by mesh \`flags2\` from the MXMD mesh descriptor, with cautious fallback for unsupported selectors.
+- Skinning indices refer to **MXMD bone-name palette order**. The importer resolves each palette entry by **name** to the already-imported sibling \`*_rig.hkt\` skeleton.
+- Successful draws use a duplicate Unity Mesh with \`BoneWeight[]\`, computed inverse-bind matrices, and SkinnedMeshRenderer. **Unsupported draw calls remain intact as MeshRenderer**, preserving existing geometry.
+- This is **not** auto-weighting/proximity skinning. No guessed bone assignments are generated.
+
+**Test:**
+1. Update from \`main\`. Select \`dl019100.camdo\`, choose **Rig** and enable **Import Skell HKT Hierarchy** and **Import Skell Bone Weights**; click Apply/Reimport.
+2. Inspect the imported root: \`Skell_Rig\` should be present, and successful draws should use **SkinnedMeshRenderer**.
+3. In Console inspect \`Skell weight import: X SkinnedMeshRenderer draw calls, Y static fallbacks\` and the first eight fallback causes.
+4. Right-click the selected CAMDO in Project > **XBX2Unity > Audit Skell Bone Weights**, or **Tools > XBX2Unity > Audit Selected Skell Bone Weights**. The report is written to \`XBX_Exports/SkellAudits/dl019100_skin_weights.txt\`, listing HKT vs MXMD skinning bone names, vertex attributes, weight table buffer indices, and mesh flags.
+
+**Important:** This importer has been implemented based on the xc3_lib legacy format code, but no Unity scene test of actual weight deformation has been performed in the connected environment. If the MXMD bone names do not match the HKT skeleton, or the source uses unexpected buffer layouts, skinning remains disabled for affected draws. Share the audit report plus the Console fallback counts for precise follow-on fixes. This stage does not implement MTXT decoding or AnimationClips.
+
+Reference: [ScanMountGoat/xc3_lib](https://github.com/ScanMountGoat/xc3_lib) (\`xc3_lib/src/vertex.rs\`, \`xc3_lib/src/mxmd/legacy.rs\`, \`xc3_model/src/skinning.rs\`).
+
+
 ## Native Skell pipeline (v0.7.0, first working stage)
 
 The `chr_dl.cpk` archive contains model groups such as `dl019100.camdo`, `dl019100.casmt`,
