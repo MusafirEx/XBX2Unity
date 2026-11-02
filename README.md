@@ -19,6 +19,14 @@ The first native importer in v0.5.0 incorrectly decoded MXMD metadata as little-
 
 After upgrading the package, right-click `Assets/XBX/ma9990/terrain/0.camdo` and select **Reimport**. If a later geometry parsing issue appears, copy its exact error and a small sample file for focused binary debugging. Packaging CI does not compile or run Unity Editor.
 
+### CAMDO binary header audit (v0.5.2)
+
+If Unity displays `Missing Models/VertexData root pointers`, the source file passed the `MXMD 10040` header check but at least one expected root field is null. Do not force offset guesses.
+
+Select one `Assets/XBX/ma9990/terrain/0.camdo` in the Project view and choose **Assets > XBX2Unity > Audit CAMDO Header** (or **Tools > XBX2Unity > Audit Selected CAMDO Header**). The tool logs an informative report and writes a small text file under `XBX_Exports/CAMDO_Audits/` with the first 64 bytes, the big-endian root fields, the source length, and any adjacent CASMT file size. This is a read-only operation. Share the report for further format-specific decoder work.
+
+The v0.5.2 importer itself also reports both pointer values and a bounded header dump in the Console when they are absent. Do not bulk-reimport all CAMDO files until one terrain model is validated.
+
 ## Native CAMDO importer (experimental v0.5.0, no GLTF conversion required)
 
 XBX2Unity now includes **XBXCamdoNativeImporter**, a pure C# Unity 2022.3 `ScriptedImporter` for `.camdo` files from **Wii U Xenoblade Chronicles X** using the `MXMD` `10040` format. It follows the same basic Editor/import asset workflow as [EMD2Unity](https://github.com/MusafirEx/EMD2Unity) and [Bress2Unity](https://github.com/MusafirEx/Bress2Unity).
