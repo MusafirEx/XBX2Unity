@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(2, "camdo")]
+    [ScriptedImporter(3, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -31,9 +31,18 @@ namespace MusafirEx.XBX2Unity.Editor
         public bool bindExtractedTextures = true;
         [Range(0, 15)] public int baseTextureSlot = 0;
         [Header("Experimental Map Edge Blend")]
+        // Explicit opt-in until the source shader's texture roles are verified.
         public bool enableExperimentalEdgeBlend = false;
         [Range(0, 15)] public int blendTextureSlot = 1;
         [Range(0, 3)] public int blendChannel = 0;
+        // 0=vBlend; 1=vertex color; 2=base texture RGBA; 3=overlay texture RGBA; 4=constant.
+        [Range(0, 4)] public int blendMaskSource = 0;
+        // Optional second UV set for the overlay texture. vBlend remains in uv3.
+        [Range(0, 1)] public int overlayUVSet = 0;
+        public bool invertBlendMask = false;
+        // 0=composite; 1=raw mask; 2=blend weight; 3=base; 4=overlay; 5=vBlend RGB.
+        [Range(0, 5)] public int blendDebugView = 0;
+        [Range(0f, 1f)] public float constantBlendWeight = 0.5f;
         [Range(0f, 1f)] public float blendThreshold = 0.5f;
         [Range(0.001f, 0.5f)] public float blendSoftness = 0.12f;
         public bool useVertexTint = false;
@@ -56,6 +65,8 @@ namespace MusafirEx.XBX2Unity.Editor
 
                 Dictionary<int, Material> materials = new Dictionary<int, Material>();
                 int boundBaseTextures = 0, boundBlendTextures = 0;
+                int meshHasVBlend = 0, meshHasVertexColor = 0, meshHasUv1 = 0, meshNoVBlend = 0;
+                int distinctTexturePairs = 0;
                 int missingTextureReferences = 0;
                 string textureRoot = FindMapTextureRoot(ctx.assetPath);
                 if (!string.IsNullOrEmpty(document.textureMetadataWarning))
@@ -93,6 +104,11 @@ namespace MusafirEx.XBX2Unity.Editor
                         {
                             try
                             {
+                                var activeBuffer = sourceModel.geometry.vertices[(int)draw.vertexBufferIndex];
+                                if (activeBuffer.Find(14) != null) meshHasVBlend++;
+                                else meshNoVBlend++;
+                                if (activeBuffer.Find(17, 35) != null) meshHasVertexColor++;
+                                if (activeBuffer.Find(6) != null) meshHasUv1++;
                                 mesh = BuildMesh(sourceModel.geometry.reader,
                                     sourceModel.geometry.vertices[(int)draw.vertexBufferIndex],
                                     sourceModel.geometry.indices[(int)draw.indexBufferIndex],
@@ -119,8 +135,23 @@ namespace MusafirEx.XBX2Unity.Editor
                             int materialId = (int)draw.materialIndex;
                             if (!materials.TryGetValue(materialId, out mat))
                             {
-                                Shader shader = enableExperimentalEdgeBlend
-                                    ? Shader.Find("XBX2Unity/Map Vertex Blend") : null;
+                                // Shader.Find can return null in an AssetImportWorker
+                                // before custom shader registration. Load by package path
+                                // first for UPM; Shader.Find remains the .unitypackage fallback.
+                                Shader shader = null;
+                                if (enableExperimentalEdgeBlend)
+                                {
+                                    const string shaderPath =
+                                        "Packages/com.musafirex.xbx2unity/Runtime/Shaders/XBXMapVertexBlend.shader";
+                                    shader = AssetDatabase.LoadAssetAtPath<Shader>(shaderPath) ??
+                                        Shader.Find("XBX2Unity/Map Vertex Blend");
+                                    if (shader == null)
+                                        ctx.LogImportWarning("Map Vertex Blend shader not loaded; " +
+                                            "falling back to Lit. Check that the Runtime/Shaders folder is installed.");
+                                    else if (shaderPath.StartsWith("Packages/") &&
+                                        AssetDatabase.LoadAssetAtPath<Shader>(shaderPath) != null)
+                                        ctx.DependsOnSourceAsset(shaderPath);
+                                }
                                 if (shader == null)
                                     shader = Shader.Find("Universal Render Pipeline/Lit") ??
                                         Shader.Find("HDRP/Lit") ?? Shader.Find("Standard") ?? Shader.Find("Unlit/Texture");
@@ -131,6 +162,11 @@ namespace MusafirEx.XBX2Unity.Editor
                                 if (mat.HasProperty("_BlendChannel")) mat.SetFloat("_BlendChannel", blendChannel);
                                 if (mat.HasProperty("_BlendThreshold")) mat.SetFloat("_BlendThreshold", blendThreshold);
                                 if (mat.HasProperty("_BlendSoftness")) mat.SetFloat("_BlendSoftness", blendSoftness);
+                                if (mat.HasProperty("_MaskSource")) mat.SetFloat("_MaskSource", blendMaskSource);
+                                if (mat.HasProperty("_ConstantWeight")) mat.SetFloat("_ConstantWeight", constantBlendWeight);
+                                if (mat.HasProperty("_OverlayUVSet")) mat.SetFloat("_OverlayUVSet", overlayUVSet);
+                                if (mat.HasProperty("_InvertMask")) mat.SetFloat("_InvertMask", invertBlendMask ? 1f : 0f);
+                                if (mat.HasProperty("_DebugView")) mat.SetFloat("_DebugView", blendDebugView);
                                 if (mat.HasProperty("_UseVertexTint")) mat.SetFloat("_UseVertexTint", useVertexTint ? 1f : 0f);
                                 if (mat.HasProperty("_EnableBlend")) mat.SetFloat("_EnableBlend", 0f);
 
@@ -155,6 +191,7 @@ namespace MusafirEx.XBX2Unity.Editor
                                             mat.SetTexture("_BlendTex", blendTexture);
                                             mat.SetFloat("_EnableBlend", 1f);
                                             boundBlendTextures++;
+                                            if (baseTexture != blendTexture) distinctTexturePairs++;
                                         }
                                     }
                                 }
@@ -179,7 +216,18 @@ namespace MusafirEx.XBX2Unity.Editor
                         geometryCache.Count + " unique meshes. Bound extracted base textures: " +
                         boundBaseTextures + ", experimental blended materials: " + boundBlendTextures +
                         ", unresolved texture references: " + missingTextureReferences +
-                        ". Map material shader interpretation remains experimental.");
+                        ". vBlend buffers=" + meshHasVBlend +
+                        ", without vBlend=" + meshNoVBlend +
+                        ", vertex color buffers=" + meshHasVertexColor +
+                        ", UV1 buffers=" + meshHasUv1 +
+                        ", distinct base/overlay texture pairs=" + distinctTexturePairs +
+                        ". Edge shader uses selected mask source; source texture roles are not verified.");
+                    if (enableExperimentalEdgeBlend && boundBlendTextures == 0)
+                        ctx.LogImportWarning("Edge blending is enabled but no materials have two resolved textures. " +
+                            "Check Blend Texture Slot, mapped PNG paths, and the source material links.");
+                    else if (enableExperimentalEdgeBlend && blendMaskSource == 0 && meshHasVBlend == 0)
+                        ctx.LogImportWarning("Edge blending uses vBlend but no imported mesh has attribute 14. " +
+                            "Inspect the mask source (vertex color/texture alpha) before using a fallback.");
                 }
             }
             catch (Exception e)
@@ -255,12 +303,14 @@ namespace MusafirEx.XBX2Unity.Editor
             var uv = buffer.Find(5, 6, 7, 8, 9, 10, 11, 12, 13);
             var color = buffer.Find(17, 35);
             var blend = buffer.Find(14); // vBlend = UNorm8x4, independent of vColor.
+            var uv1 = buffer.Find(6); // distinct second UV set; not the blend mask.
             var tangent = buffer.Find(29, 40);
 
             int count = buffer.count;
             var positions = new Vector3[count];
             Vector3[] normals = normal == null ? null : new Vector3[count];
             Vector2[] texCoords = uv == null ? null : new Vector2[count];
+            Vector2[] overlayTexCoords = uv1 == null || uv1.size < 8 ? null : new Vector2[count];
             Color32[] colors = color == null || !importVertexColors ? null : new Color32[count];
             var blendWeights = blend == null || blend.size < 4 ? null : new List<Vector4>(count);
             Vector4[] tangents = tangent == null ? null : new Vector4[count];
@@ -285,6 +335,12 @@ namespace MusafirEx.XBX2Unity.Editor
                     float u = reader.BEFloat(baseOffset + uv.offset);
                     float v = reader.BEFloat(baseOffset + uv.offset + 4);
                     texCoords[i] = new Vector2(u, flipUVv ? 1f - v : v);
+                }
+                if (overlayTexCoords != null)
+                {
+                    float u1 = reader.BEFloat(baseOffset + uv1.offset);
+                    float v1 = reader.BEFloat(baseOffset + uv1.offset + 4);
+                    overlayTexCoords[i] = new Vector2(u1, flipUVv ? 1f - v1 : v1);
                 }
                 if (colors != null)
                 {
@@ -330,6 +386,7 @@ namespace MusafirEx.XBX2Unity.Editor
             result.vertices = positions;
             result.triangles = triangles;
             if (texCoords != null) result.uv = texCoords;
+            if (overlayTexCoords != null) result.uv2 = overlayTexCoords;
             if (colors != null) result.colors32 = colors;
             if (blendWeights != null) result.SetUVs(2, blendWeights);
             if (normals != null) result.normals = normals;

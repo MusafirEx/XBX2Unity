@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.2 - 2026-11-02
+- Add source mask selection for experimental terrain edge blending: MXMD vBlend, vertex color RGBA, base texture channel, overlay texture channel, or a constant diagnostic weight.
+- Preserve secondary stage UV1 in the Unity mesh and allow overlay texture UV0 or UV1 sampling.
+- Add mask inversion and diagnostic shader views (raw mask, thresholded weight, base/overlay, vBlend RGB) to distinguish absent mask, wrong channel, or wrong texture.
+- Import summary logs count source vBlend buffers, vertex color and UV1, blended materials and distinct texture pairs.
+- Add Tools/Assets > XBX2Unity > Inspect CAMDO Blend Data; writes bounded source mask min/max and linked material report to XBX_Exports/BlendAudits without changing game files.
+- Keep experimental blending opt-in; the original Wii U per-material shader/output mapping remains unknown and must not be inferred from slot number.
+- Bump ScriptedImporter version to 3 and include diagnostic editor tool in distribution packages.
+
+
 ## 0.6.1 - 2026-11-02
 - Fix `MXMDMaterial_V1` array stride: 136 bytes, not 132. Confirmed with PredatorCZ/XenoLib legacy C++ layout.
 - Prevent material-to-material pointer drift into float values such as `0x3F000000` observed in the user's `ma9990` Editor.log.
