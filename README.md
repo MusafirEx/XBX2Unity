@@ -44,6 +44,20 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell weight buffer selector fix (v0.7.2)
+
+Actual Unity `Editor.log` after enabling **Rig > Import Skell Bone Weights** on v0.7.1 showed:
+
+| Skell model | Skinned draws | Static fallback draws | Reason |
+| --- | ---: | ---: | --- |
+| dl019100 | 1 | 53 | `weight header slot 4=0 has no validated shared skin buffer` |
+| dl019600 | 2 | 29 | Same |
+
+v0.7.1 rejected a valid legacy fallback selector. In the [xc3_model implementation](https://github.com/ScanMountGoat/xc3_lib/blob/main/xc3_model/src/vertex.rs), the six header indices reference **original vertex buffers** and are mapped into the separate weight-buffer collection using `index.checked_sub(first_weight_buffer)`. When that subtraction fails, the [legacy skinning implementation](https://github.com/ScanMountGoat/xc3_lib/blob/main/xc3_model/src/skinning.rs) uses ordinal 0. Also, flags 1/8 can concatenate two shared buffers, even if both resolve to the same buffer. v0.7.2 reproduces this mapping instead of requiring a raw header slot to match an original vertex buffer index. **Source weights and HKT remapping remain validated; unsupported skins keep MeshRenderer.**
+
+**Test v0.7.2**: reimport `dl019100.camdo`, confirm import summary `Skell weight import: X SkinnedMeshRenderer draw calls, Y static fallbacks`, inspect actual deformation by rotating one bone on a scene instance, and run **Audit Skell Bone Weights** to see resolved original weight selector values. The exact original bone weighting is not yet verified by rendering and deformation tests.
+
+
 ## Skell bone weights and SkinnedMeshRenderer preview (v0.7.1)
 
 **Requested priority:** bone/weight/rig first, then **Skell texture decoding**, then **animation decoding**. v0.7.1 only changes the bone phase.

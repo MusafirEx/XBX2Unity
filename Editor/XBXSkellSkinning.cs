@@ -174,41 +174,71 @@ namespace MusafirEx.XBX2Unity.Editor
             out string diagnostic)
         {
             diagnostic = null;
-            if (all.Count == 1) return new List<int> { all[0] };
-            // See xc3_model/src/skinning.rs WeightGroups::Legacy::weight_buffer.
-            // Geometry header stores the six original vertex buffer indices.
-            int f = (int)(flags & 0xFF);
+            if (all.Count == 0)
+                return NoBuffers(out diagnostic);
+            // XCX legacy VertexData keeps six indices into the ORIGINAL vertex
+            // buffer array. xc3_model/src/vertex.rs removes all weight buffers
+            // starting at the first weight buffer; its weight_buffer_indices are
+            // mapped with checked_sub(weight_buffer_start). An absent/earlier
+            // selector becomes None, which xc3_model/src/skinning.rs resolves
+            // with .unwrap_or_default() => ordinal zero.
+            //
+            // v0.7.1 used "all.Contains(raw)" instead and rejected 53 of the 54
+            // draw calls in dl019100 with "slot 4=0". This is incorrect.
+            int firstWeightBuffer = all[0];
+            int selectorFlags = (int)(flags & 0xff);
             int[] slots;
-            if (f == 1)
-                slots = geometry.weightBufferIndices[4] > 0 ? new[] { 4, 0 } : new[] { 0, 4 };
-            else if (f == 8)
-                slots = new[] { 3, 4 };
-            else if (f == 2 || f == 64)
-                slots = new[] { 1 };
-            else if (f == 0x21)
-                slots = new[] { 4 };
-            else
-                slots = new[] { 0 };
-            var chosen = new List<int>();
-            foreach (int slot in slots)
+            if (selectorFlags == 1)
             {
-                int raw = geometry.weightBufferIndices[slot];
-                // Index slots of 0 can mean missing data; when multiple buffers
-                // exist, never silently pick one if the flag mapping is ambiguous.
-                if (!all.Contains(raw))
+                // Preserve both concatenated parts even if they refer to the
+                // same buffer: xc3_model concatenates, it does not deduplicate.
+                int slot4 = ToWeightOrdinal(geometry.weightBufferIndices[4],
+                    firstWeightBuffer, all.Count);
+                if (slot4 < 0)
                 {
-                    diagnostic = "weight header slot " + slot + "=" + raw +
-                        " has no validated shared skin buffer";
+                    diagnostic = "MXMD skin selector 4 points outside weight buffers";
                     return null;
                 }
-                if (!chosen.Contains(raw)) chosen.Add(raw);
+                slots = slot4 > 0 ? new[] { 4, 0 } : new[] { 0, 4 };
             }
-            if (chosen.Count == 0)
+            else if (selectorFlags == 8) slots = new[] { 3, 4 };
+            else if (selectorFlags == 2 || selectorFlags == 64) slots = new[] { 1 };
+            else if (selectorFlags == 0x21) slots = new[] { 4 };
+            else slots = new[] { -1 }; // xc3_model first() for other flags.
+
+            var chosen = new List<int>(slots.Length);
+            foreach (int slot in slots)
             {
-                diagnostic = "unable to select weight buffers for flags " + f;
-                return null;
+                if (slot == -1)
+                {
+                    chosen.Add(all[0]);
+                    continue;
+                }
+                int raw = geometry.weightBufferIndices[slot];
+                int ordinal = ToWeightOrdinal(raw, firstWeightBuffer, all.Count);
+                if (ordinal < 0)
+                {
+                    diagnostic = "weight header slot " + slot + "=" + raw +
+                        " resolves outside the " + all.Count + " skin buffers " +
+                        "(original first buffer=" + firstWeightBuffer + ")";
+                    return null;
+                }
+                chosen.Add(all[ordinal]);
             }
             return chosen;
+        }
+
+        private static int ToWeightOrdinal(int raw, int first, int count)
+        {
+            // checked_sub(first) -> None -> unwrap_or_default(0) in xc3_model.
+            int ordinal = raw < first ? 0 : raw - first;
+            return ordinal < count ? ordinal : -1;
+        }
+
+        private static List<int> NoBuffers(out string reason)
+        {
+            reason = "no shared weight buffers";
+            return null;
         }
 
         private static bool Finite(float f) { return !float.IsNaN(f) && !float.IsInfinity(f); }
