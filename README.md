@@ -20,6 +20,12 @@ The first native importer in v0.5.0 incorrectly decoded MXMD metadata as little-
 After upgrading the package, right-click `Assets/XBX/ma9990/terrain/0.camdo` and select **Reimport**. If a later geometry parsing issue appears, copy its exact error and a small sample file for focused binary debugging. Packaging CI does not compile or run Unity Editor.
 
 
+### Material texture stride fix (v0.6.1)
+
+After testing the map textures in Unity, the Editor.log showed many `CAMDO texture metadata: Invalid CAMDO pointer/range: offset=1056965360` warnings (often beginning with `0x3F000000`) and mostly `Bound extracted base textures: 0` despite successful static meshes. Legacy `MXMDMaterial_V1` entries are **136 bytes** (not 132). A short stride shifted subsequent records four bytes into float data, which was interpreted as a texture offset. v0.6.1 uses the original 136-byte layout and reports exact record addresses on invalid links.
+
+**Reimport one** `Assets/XBX/ma9990/terrain/0.camdo` after updating; validate new counts and actual texture mapping before bulk-reimport. This fixes the known material stride defect; it does **not** fix the separate terrainLOD/3, terrainLOD/4 or Skybox0 geometry variants.
+
 ## Native map textures & experimental edge blending (v0.6.0)
 
 **No glTF conversion**. The native \`.camdo\` ScriptedImporter now also reads Wii U MXMD v10040 **material texture links** and **external texture mapping records**, then binds the extracted textures located under the same stage's \`textures/\` directory. The optional **Map Vertex Blend** shader uses the source \`vBlend\` attribute (type 14, UNorm8x4) for a two-layer edge-blend preview.

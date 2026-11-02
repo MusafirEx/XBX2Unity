@@ -642,13 +642,31 @@ namespace MusafirEx.XBX2Unity.Editor
                 int materialCount = Count(materialsBase + 4, 8192, "materials");
                 if (materialCount > 0 && materialsArray == 0)
                     throw new InvalidDataException("Material table pointer is missing");
-                // MXMD legacy Material = 132 B, textures offset/count = +0x3C/+0x40.
-                Range(materialsArray, (long)materialCount * 132);
+                // MXMDMaterial_V1 is 136 bytes, NOT 132:
+                // name/flags(8) + floats[13](52) + texture offset/count(8)
+                // + unk[9](36) + links offset/count(8) + null[6](24).
+                // Source: PredatorCZ/XenoLib/source/MXMD_V1.h.
+                // Using 132 shifts every subsequent material into its floats,
+                // producing bogus pointers like 0x3F000000 in Unity Editor.log.
+                const int MaterialStride = 136;
+                Range(materialsArray, (long)materialCount * MaterialStride);
                 for (int i = 0; i < materialCount; i++)
                 {
-                    int materialAt = checked(materialsArray + i * 132);
-                    int linkArray = Relative(materialsBase, materialAt + 60);
+                    int materialAt = checked(materialsArray + i * MaterialStride);
+                    uint linkRaw = U32(materialAt + 60);
                     int linkCount = Count(materialAt + 64, 256, "material texture links");
+                    if (linkCount > 0 && (linkRaw == 0 ||
+                        (long)materialsBase + linkRaw > bytes.Length - (long)linkCount * 4))
+                    {
+                        throw new InvalidDataException("Invalid material texture pointer: material=" + i +
+                            ", record=0x" + materialAt.ToString("X") +
+                            ", base=0x" + materialsBase.ToString("X") +
+                            ", texturesOffset=0x" + linkRaw.ToString("X8") +
+                            ", texturesCount=" + linkCount +
+                            ", arrayCount=" + materialCount +
+                            ", fileSize=" + bytes.Length);
+                    }
+                    int linkArray = linkRaw == 0 ? 0 : Relative(materialsBase, materialAt + 60);
                     if (linkCount > 0 && linkArray == 0)
                         throw new InvalidDataException("Material " + i + " link table is missing");
                     Range(linkArray, (long)linkCount * 4);
