@@ -26,37 +26,37 @@ namespace MusafirEx.XBX2Unity.Editor
                         n.Contains("_NRM") || n.Contains("_NM") || n.Contains("NORMAL");
                 }
             }
-            internal int ColorScore
+            // The _RGB companion on many Skells may be intended for a
+            // customizable paint/shader pass. File suffixes are clues, NOT
+            // definitive proof of final shader semantics. Prefer unsuffixed
+            // source color textures unless the user opts in to _RGB.
+            internal int ColorScore { get { return ScoreAsAlbedo(false); } }
+            internal int ScoreAsAlbedo(bool preferRgbVariant)
             {
-                get
+                if (IsNormalData || format != 49 || usage == 16 ||
+                    usage == 528 || usage == 65569) return -1;
+                string n = (sourceName ?? "").ToUpperInvariant();
+                string[] tokens = n.Split('_');
+                foreach (string token in tokens)
                 {
-                    if (IsNormalData || format != 49 || usage == 16 ||
-                        usage == 528 || usage == 65569) return -1;
-                    string n = (sourceName ?? "").ToUpperInvariant();
-                    // Xenoblade X can label SPM/RFM/RF/GLW/GLO textures
-                    // with usage 32 (which also appears on color maps).
-                    // Match source suffixes BEFORE the broad usage hint.
-                    if (n.EndsWith("_SPM", StringComparison.Ordinal) ||
-                        n.EndsWith("_GLO", StringComparison.Ordinal) ||
-                        n.EndsWith("_GLW", StringComparison.Ordinal) ||
-                        n.EndsWith("_RFM", StringComparison.Ordinal) ||
-                        n.EndsWith("_REF", StringComparison.Ordinal) ||
-                        n.EndsWith("_RF", StringComparison.Ordinal) ||
-                        n.EndsWith("_OCL", StringComparison.Ordinal) ||
-                        n.EndsWith("_DEP", StringComparison.Ordinal))
+                    // Exact role tokens catch suffixes with model variants,
+                    // e.g. DL019600_RFM_B as well as DL019600_FL_RFM.
+                    if (token == "SPM" || token == "GLO" || token == "GLW" ||
+                        token == "RFM" || token == "REF" || token == "RF" ||
+                        token == "OCL" || token == "DEP" || token == "NRM" ||
+                        token == "NM" || token == "NORMAL")
                         return -1;
-                    // Explicit color suffix is a stronger hint than a generic
-                    // "usage 32" that some non-color textures share.
-                    if (n.EndsWith("_RGB", StringComparison.Ordinal) ||
-                        n.EndsWith("_COL", StringComparison.Ordinal) ||
-                        n.EndsWith("_DCL", StringComparison.Ordinal) ||
-                        n.EndsWith("_AVA", StringComparison.Ordinal))
-                        return 160;
-                    if (usage == 80) return 150;
-                    if (usage == 96 || usage == 48) return 140;
-                    if (usage == 32 || usage == 34 || usage == 544) return 90;
-                    return 20; // BC1 without a semantic usage hint
                 }
+                if (n.EndsWith("_RGB", StringComparison.Ordinal))
+                    return preferRgbVariant ? 170 : 40;
+                if (n.EndsWith("_COL", StringComparison.Ordinal) ||
+                    n.EndsWith("_DCL", StringComparison.Ordinal) ||
+                    n.EndsWith("_AVA", StringComparison.Ordinal))
+                    return 160;
+                if (usage == 80) return 150;
+                if (usage == 96 || usage == 48) return 140;
+                if (usage == 32 || usage == 34 || usage == 544) return 100;
+                return 20;
             }
         }
         private static uint U32(byte[] data, int p)

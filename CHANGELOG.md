@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.4 - 2026-11-02
+- Fix the source-albedo preference for dl109100: the importer always preferred *_RGB companion textures instead of the unsuffixed primary map for five of seven materials. Original Skell color customization may use RGB companion maps in a separate shader pass; the exact semantics are not yet verified.
+- Make primary unsuffixed BC1 textures the default albedo choice. Add explicit **Prefer Skell _RGB as Albedo** option (OFF by default) under Material > Auto Select Skell Color Texture for comparing behavior. Manual source material slot override remains available.
+- Ensure non-color role tokens such as RFM_B/NRM_B/GLW_B are excluded regardless of suffix variant; previously a generic usage=32 let DL019600_RFM_B count as color.
+- Add seven dl109100 source-material regression fixtures to CI, testing both primary and *_RGB modes; this test checks source-selection heuristics, not final visual shader equivalence.
+- Bump ScriptedImporter revision 10 for automatic reimport. Preserve v0.8.3 GX2 deswizzle, skinned rig, bindposes and geometry unchanged.
+- Actual in-game Skell paint masks and native shader blending are outside this fix.
+
+
 ## 0.8.3 - 2026-11-02
 - Fix Unity 2022.3 D3D11 Skell diagnostic shader syntax error: local identifier `line` is reserved in HLSL. Rename it to `gridLineWeight` in the UV0 Checkerboard debug view.
 - Add regression assertions to GX2 test workflow to catch the invalid shader identifier being reintroduced; the CI test does not replace actual shader compilation.

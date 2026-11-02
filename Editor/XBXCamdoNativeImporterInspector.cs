@@ -74,6 +74,11 @@ namespace MusafirEx.XBX2Unity.Editor
                 {
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("maxSkellTextures"));
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("autoSelectSkellColorTexture"));
+                    if (serializedObject.FindProperty("autoSelectSkellColorTexture").boolValue)
+                        EditorGUILayout.PropertyField(
+                            serializedObject.FindProperty("preferSkellRgbCompanionAsAlbedo"),
+                            new GUIContent("Prefer Skell _RGB as Albedo",
+                                "OFF = source primary texture before *_RGB. ON = experimental *_RGB as base color, useful to compare custom Skell paint data."));
                     if (!serializedObject.FindProperty("autoSelectSkellColorTexture").boolValue)
                         EditorGUILayout.HelpBox(
                             "Manual mode uses Base Texture Slot below. A source " +
@@ -98,8 +103,10 @@ namespace MusafirEx.XBX2Unity.Editor
                                 "UV0 Checkerboard (no texture)" });
                     }
                     EditorGUILayout.HelpBox(
-                        "Auto mode chooses a source BC1 color texture by the original " +
-                        "MXMD usage hint (COL/RGB, etc.). BC5/NRM data are not placed " +
+                        "Auto mode uses source MXMD texture metadata. Unsuffixed " +
+                        "primary BC1 is preferred over *_RGB (possibly custom paint data). " +
+                        "Toggle Prefer Skell _RGB as Albedo for comparisons. " +
+                        "BC5/NRM data are not placed " +
                         "in the albedo slot. Source gMatCol is optional. The diagnostic " +
                         "shader can compare source texture and raw mesh UV0 (checker). " +
                         "Use UV0 Checkerboard to separate broken UVs from wrong GX2 deswizzle. " +
