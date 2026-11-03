@@ -356,6 +356,10 @@ namespace MusafirEx.XBX2Unity.Editor
                             throw new InvalidDataException("sentinel section field at " +
                                 name + " @0x" + at.ToString("X") + " values=" +
                                 FormatFields(raw));
+                        if (raw.Any(v => v > data.Length))
+                            throw new InvalidDataException("section offset exceeds file: " +
+                                name + " @0x" + at.ToString("X") + " words=" +
+                                FormatFields(raw));
                         int dataStart = CheckedOffset(raw[0], data.Length, "section data start");
                         int local = CheckedOffset(raw[1], data.Length, "local fixup offset");
                         int global = CheckedOffset(raw[2], data.Length, "global fixup offset");
