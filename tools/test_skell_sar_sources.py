@@ -27,7 +27,7 @@ def fixture(big_endian=False, corrupt=False):
     data[0:4] = b"1RAS"
     struct.pack_into(order + "5I", data, 4, len(data), 10002,
                      entry_count, table, start)
-    data[32:32+11] = b"dl019600.sar"
+    data[32:32+len(b"dl019600.sar")] = b"dl019600.sar"
     for i, (offset, payload, name) in enumerate([
         (start, hkt, b"000000_idle_anm.hkt"),
         (start + len(hkt), bc, b"000001_test.bc"),
@@ -82,7 +82,7 @@ def main():
         "hkaSplineCompressedAnimation", "hkaDeltaCompressedAnimation",
         "hkaInterleavedUncompressedAnimation",
         "FileMode.CreateNew", "SafeFileName", "XBX_Exports",
-        "Motion Archive", "motion decoding pending",
+        "Motion Archive", "native Havok clips require decoding",
     )
     combined = AUDIT + UI
     for item in required:
