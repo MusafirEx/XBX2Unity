@@ -53,6 +53,26 @@ namespace MusafirEx.XBX2Unity.Editor
             internal bool isGlobal;
         }
 
+        // Verified scalar fields and pointer-backed binding array.
+        // Spline channel/keyframe decoding is NOT performed by this probe.
+        internal sealed class MotionProbe
+        {
+            internal string skeletonName;
+            internal int trackCount;
+            internal int floatTrackCount;
+            internal int frameCount;
+            internal int blockCount;
+            internal int maxFramesPerBlock;
+            internal int maskAndQuantizationBytes;
+            internal float durationSeconds;
+            internal float frameDurationSeconds;
+            internal float blockDurationSeconds;
+            internal float inverseBlockDuration;
+            internal int[] trackToBone;
+            internal int referenceFrameSamples;
+            internal bool referenceFrameSamples16Bytes;
+        }
+
         internal sealed class Result
         {
             internal string path;
@@ -73,6 +93,7 @@ namespace MusafirEx.XBX2Unity.Editor
             internal readonly List<string> warnings = new List<string>();
             internal readonly List<ObjectRef> objects = new List<ObjectRef>();
             internal readonly List<PointerRef> pointers = new List<PointerRef>();
+            internal MotionProbe motion;
             internal bool Valid { get { return string.IsNullOrEmpty(error); } }
             internal int Count(string className)
             {
@@ -225,6 +246,45 @@ namespace MusafirEx.XBX2Unity.Editor
                     sb.AppendLine("  Type: " + item.Key + " x" + item.Value);
                 sb.AppendLine("  Typed object references: " + r.objects.Count +
                     " | Validated pointer references: " + r.pointers.Count);
+                if (r.motion != null)
+                {
+                    MotionProbe m = r.motion;
+                    sb.AppendLine("  PHASE 2C MOTION METADATA (verified fields, not keyframes):");
+                    sb.AppendLine("    Original skeleton name: " + m.skeletonName);
+                    sb.AppendLine("    Duration seconds: " +
+                        m.durationSeconds.ToString("R",
+                            System.Globalization.CultureInfo.InvariantCulture));
+                    sb.AppendLine("    Frames: " + m.frameCount +
+                        " | Frame duration seconds: " +
+                        m.frameDurationSeconds.ToString("R",
+                            System.Globalization.CultureInfo.InvariantCulture) +
+                        " | Approx FPS: " +
+                        (1.0f / m.frameDurationSeconds).ToString("F4",
+                            System.Globalization.CultureInfo.InvariantCulture));
+                    sb.AppendLine("    Transform tracks: " + m.trackCount +
+                        " | Float tracks: " + m.floatTrackCount);
+                    sb.AppendLine("    Compressed blocks: " + m.blockCount +
+                        " | Max frames/block: " + m.maxFramesPerBlock +
+                        " | Mask/quantization bytes: " + m.maskAndQuantizationBytes);
+                    sb.AppendLine("    Block duration: " +
+                        m.blockDurationSeconds.ToString("R",
+                            System.Globalization.CultureInfo.InvariantCulture) +
+                        " | Inverse: " +
+                        m.inverseBlockDuration.ToString("R",
+                            System.Globalization.CultureInfo.InvariantCulture));
+                    sb.AppendLine("    Binding track->bone index entries: " + m.trackToBone.Length);
+                    if (m.referenceFrameSamples > 0)
+                        sb.AppendLine("    Reference-frame samples: " + m.referenceFrameSamples +
+                            " | 16-byte records fit: " + m.referenceFrameSamples16Bytes);
+                    int displayed = includeHeaders ? m.trackToBone.Length :
+                        Math.Min(8, m.trackToBone.Length);
+                    for (int k = 0; k < displayed; k++)
+                        sb.AppendLine("    Track " + k.ToString("D3") + " -> bone index " +
+                            m.trackToBone[k]);
+                    if (displayed < m.trackToBone.Length)
+                        sb.AppendLine("    ... " + (m.trackToBone.Length - displayed) +
+                            " additional mapping entries (select one HKT for complete list).");
+                }
                 foreach (ObjectRef obj in r.objects.OrderBy(x => x.section)
                     .ThenBy(x => x.offset).Take(32))
                 {
@@ -379,6 +439,14 @@ namespace MusafirEx.XBX2Unity.Editor
                 int length = Math.Min(96, available);
                 obj.headerHex = HexBytes(data, obj.absolute, length);
             }
+            try
+            {
+                result.motion = ReadMotionMetadata(data, sections, bigEndian, result);
+            }
+            catch (InvalidDataException ex)
+            {
+                result.warnings.Add("Phase 2C metadata not verified: " + ex.Message);
+            }
             if (result.virtualFixups == 0)
                 result.warnings.Add("No virtual-fixup class references found; metadata incomplete.");
             if (result.Count("hkaSplineCompressedAnimation") == 0 &&
@@ -387,6 +455,172 @@ namespace MusafirEx.XBX2Unity.Editor
                 result.warnings.Add("No supported animation class reference found; " +
                     "inspect HKT section layout manually.");
             return result;
+        }
+
+        // Phase 2C: structural hkaSplineCompressedAnimation/hkaAnimationBinding
+        // metadata, validated against the pointer fixups and frame timing.
+        // 32-bit Havok 2013 layout; do not use for 64-bit packfiles.
+        private static MotionProbe ReadMotionMetadata(byte[] data, Section[] sections,
+            bool bigEndian, Result result)
+        {
+            if (result.pointerBytes != 4) return null;
+            ObjectRef anim = result.objects.FirstOrDefault(o =>
+                o.className == "hkaSplineCompressedAnimation");
+            ObjectRef binding = result.objects.FirstOrDefault(o =>
+                o.className == "hkaAnimationBinding");
+            if (anim == null || binding == null) return null;
+            Section animSection = sections[anim.section];
+            Section bindingSection = sections[binding.section];
+            if (anim.offset + 0x44 > animSection.local ||
+                binding.offset + 0x38 > bindingSection.local)
+                throw new InvalidDataException("Animation or binding metadata truncated");
+
+            int a = anim.absolute;
+            int b = binding.absolute;
+            int codec = CheckedInt(U32(data, a + 0x08, bigEndian), 32, "animation codec");
+            if (codec != 3)
+                throw new InvalidDataException("Unexpected spline codec ID " + codec);
+            var motion = new MotionProbe
+            {
+                durationSeconds = F32(data, a + 0x0C, bigEndian),
+                trackCount = CheckedInt(U32(data, a + 0x10, bigEndian), 4096, "transform tracks"),
+                floatTrackCount = CheckedInt(U32(data, a + 0x14, bigEndian), 4096, "float tracks"),
+                frameCount = CheckedInt(U32(data, a + 0x28, bigEndian), 1000000, "frames"),
+                blockCount = CheckedInt(U32(data, a + 0x2C, bigEndian), 4096, "blocks"),
+                maxFramesPerBlock = CheckedInt(U32(data, a + 0x30, bigEndian),
+                    65536, "frames per block"),
+                maskAndQuantizationBytes = CheckedInt(U32(data, a + 0x34, bigEndian),
+                    MaxFileBytes, "mask/quantization bytes"),
+                blockDurationSeconds = F32(data, a + 0x38, bigEndian),
+                inverseBlockDuration = F32(data, a + 0x3C, bigEndian),
+                frameDurationSeconds = F32(data, a + 0x40, bigEndian)
+            };
+            if (!FinitePositive(motion.durationSeconds, 86400f) ||
+                !FinitePositive(motion.frameDurationSeconds, 10f) ||
+                !FinitePositive(motion.blockDurationSeconds, 86400f) ||
+                !FinitePositive(motion.inverseBlockDuration, 100000f) ||
+                motion.trackCount < 1 || motion.frameCount < 2 ||
+                motion.blockCount < 1 || motion.maxFramesPerBlock < 2)
+                throw new InvalidDataException("Animation durations or track/frame counts not credible");
+            if (Math.Abs((motion.frameCount - 1) * motion.frameDurationSeconds -
+                motion.durationSeconds) > Math.Max(0.1f, motion.durationSeconds * 0.015f))
+                throw new InvalidDataException("Duration conflicts with frame count/time step");
+            if (Math.Abs(motion.blockDurationSeconds *
+                motion.inverseBlockDuration - 1f) > 0.02f)
+                throw new InvalidDataException("Compressed block duration/inverse mismatch");
+
+            // A binding points to its original skeleton name (local +0x08),
+            // the animation object (global +0x0C), and an hkArray<short>
+            // trackToBoneIndices (local +0x10, element count at +0x14).
+            PointerRef animPointer = GetPointer(result, binding, 0x0C, true);
+            if (animPointer == null || animPointer.targetSection != anim.section ||
+                animPointer.target != anim.offset)
+                throw new InvalidDataException("Binding does not point to this animation");
+            PointerRef skeletonPointer = GetPointer(result, binding, 0x08, false);
+            PointerRef mappingPointer = GetPointer(result, binding, 0x10, false);
+            if (skeletonPointer == null || mappingPointer == null)
+                throw new InvalidDataException("Binding lacks skeleton name or track-map pointer");
+            motion.skeletonName = SafeAsciiString(data, sections,
+                skeletonPointer.targetSection, skeletonPointer.target, 128);
+            int mappingCount = CheckedInt(U32(data, b + 0x14, bigEndian),
+                4096, "binding indices");
+            uint mappingCapacity = U32(data, b + 0x18, bigEndian);
+            if (mappingCount != motion.trackCount ||
+                (mappingCapacity & 0x3fffffffu) < mappingCount)
+                throw new InvalidDataException("Track-map size/capacity disagrees with animation");
+            Section mapSection = sections[mappingPointer.targetSection];
+            if ((long)mappingPointer.target + (long)mappingCount * 2 > mapSection.local)
+                throw new InvalidDataException("Track-to-bone array exceeds section data");
+            int mapAt = mapSection.start + mappingPointer.target;
+            motion.trackToBone = new int[mappingCount];
+            for (int i = 0; i < mappingCount; i++)
+            {
+                short bone = unchecked((short)U16(data, mapAt + i * 2, bigEndian));
+                if (bone < 0)
+                    throw new InvalidDataException("Negative bone index at track " + i);
+                motion.trackToBone[i] = bone;
+            }
+
+            // Optional reference frame: count at +0x38 and sample pointer +0x34
+            // are supported by the reference-frame HKT object in the Wii U sample.
+            ObjectRef reference = result.objects.FirstOrDefault(o =>
+                o.className == "hkaDefaultAnimatedReferenceFrame");
+            if (reference != null && reference.offset + 0x40 <=
+                sections[reference.section].local)
+            {
+                PointerRef samples = GetPointer(result, reference, 0x34, false);
+                int sampleCount = CheckedInt(U32(data, reference.absolute + 0x38,
+                    bigEndian), 1000000, "reference frame samples");
+                float refDuration = F32(data, reference.absolute + 0x30, bigEndian);
+                if (samples != null && sampleCount > 0 &&
+                    Math.Abs(refDuration - motion.durationSeconds) <
+                        Math.Max(0.05f, motion.durationSeconds * 0.01f))
+                {
+                    motion.referenceFrameSamples = sampleCount;
+                    Section sampleSection = sections[samples.targetSection];
+                    motion.referenceFrameSamples16Bytes =
+                        (long)samples.target + (long)sampleCount * 16 <=
+                        sampleSection.local;
+                }
+            }
+            return motion;
+        }
+
+        private static PointerRef GetPointer(Result result, ObjectRef owner, int field,
+            bool isGlobal)
+        {
+            return result.pointers.FirstOrDefault(p =>
+                p.section == owner.section &&
+                p.source == owner.offset + field &&
+                p.isGlobal == isGlobal);
+        }
+
+        private static int CheckedInt(uint value, int max, string description)
+        {
+            if (value > max)
+                throw new InvalidDataException(description + " beyond bounded range: " + value);
+            return (int)value;
+        }
+
+        private static ushort U16(byte[] data, int at, bool bigEndian)
+        {
+            if (at < 0 || (long)at + 2 > data.Length)
+                throw new InvalidDataException("Bone mapping outside HKT file");
+            return bigEndian ? (ushort)((data[at] << 8) | data[at + 1]) :
+                (ushort)(data[at] | (data[at + 1] << 8));
+        }
+
+        private static float F32(byte[] data, int at, bool bigEndian)
+        {
+            uint bits = U32(data, at, bigEndian);
+            return BitConverter.ToSingle(BitConverter.GetBytes(bits), 0);
+        }
+
+        private static bool FinitePositive(float f, float maximum)
+        {
+            return !float.IsNaN(f) && !float.IsInfinity(f) && f > 0 && f < maximum;
+        }
+
+        private static string SafeAsciiString(byte[] data, Section[] sections,
+            int section, int offset, int maxLength)
+        {
+            if (section < 0 || section >= sections.Length ||
+                offset < 0 || offset >= sections[section].local)
+                throw new InvalidDataException("Skeleton name outside section");
+            Section sec = sections[section];
+            int absolute = sec.start + offset;
+            int allowed = Math.Min(maxLength, sec.local - offset);
+            int count = 0;
+            while (count < allowed && data[absolute + count] != 0)
+            {
+                byte c = data[absolute + count];
+                if (c < 32 || c > 126)
+                    throw new InvalidDataException("Nonprintable original skeleton name");
+                count++;
+            }
+            if (count < 1 || count >= allowed)
+                throw new InvalidDataException("Missing terminated original skeleton name");
+            return Encoding.ASCII.GetString(data, absolute, count);
         }
 
         private static int NextObjectOffset(List<ObjectRef> all, ObjectRef source,
