@@ -95,7 +95,7 @@ def main():
         bad = bytearray(sample)
         # Invalid data-section end must be rejected.
         endian = ">" if big else "<"
-        struct.pack_into(endian + "I", bad, 0xA0 + 16 + 40, len(sample) + 100)
+        struct.pack_into(endian + "I", bad, 0xA0 + 16 + 24, len(sample) + 100)
         try:
             parse_fixture(bytes(bad))
         except AssertionError:
