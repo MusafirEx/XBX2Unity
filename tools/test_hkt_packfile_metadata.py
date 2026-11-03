@@ -108,6 +108,44 @@ def parse_fixture(data, stride=48, first_field=16):
     return refs
 
 
+def fixture_motion_metadata():
+    """Synthetic 32-bit big-endian Havok fields using audited Wii U offsets."""
+    anim = bytearray(0x50)
+    struct.pack_into(">IfIIII", anim, 0x08, 3, 200 / 30.0, 103, 0, 0, 0)
+    struct.pack_into(">IIII", anim, 0x28, 201, 1, 256, 412)
+    struct.pack_into(">fff", anim, 0x38, 8.5, 1 / 8.5, 1 / 30.0)
+
+    binding = bytearray(0x50 + 103 * 2)
+    struct.pack_into(">II", binding, 0x14, 103, 0x80000067)
+    binding[0x40:0x40+14] = b"dl099100_Bone\0"
+    first = [0, 62, 63, 1, 64, 65, 66, 2]
+    all_bones = first + [n for n in range(103) if n not in first]
+    assert len(all_bones) == 103 and len(set(all_bones)) == 103
+    for index, bone in enumerate(all_bones):
+        struct.pack_into(">h", binding, 0x50 + index*2, bone)
+
+    codec, = struct.unpack_from(">I", anim, 0x08)
+    duration, = struct.unpack_from(">f", anim, 0x0C)
+    track_count, = struct.unpack_from(">I", anim, 0x10)
+    float_count, = struct.unpack_from(">I", anim, 0x14)
+    frames, blocks, max_frames, mask_size = struct.unpack_from(">IIII", anim, 0x28)
+    block_duration, reciprocal, frame_duration = struct.unpack_from(">fff", anim, 0x38)
+    count, capacity = struct.unpack_from(">II", binding, 0x14)
+    mapping = list(struct.unpack_from(">" + "h"*count, binding, 0x50))
+    skeleton_name = binding[0x40:0x50].split(b"\0", 1)[0].decode("ascii")
+    assert codec == 3 and float_count == 0
+    assert duration > 0 and abs(duration - 6.66666667) < 0.0001
+    assert frames == 201 and track_count == count == 103
+    assert blocks == 1 and max_frames == 256 and mask_size == 412
+    assert abs((frames-1)*frame_duration - duration) < 0.0001
+    assert abs(block_duration * reciprocal - 1) < 0.0001
+    assert capacity & 0x3fffffff == count
+    assert skeleton_name == "dl099100_Bone"
+    assert mapping[:8] == first
+    assert mapping != list(range(track_count))  # track i is not always bone i
+    assert 201*16 == 3216  # synthetic reference-frame sample footprint
+
+
 def main():
     for big in (True, False):
         for stride, first_field in ((48, 16), (48, 20), (64, 20)):
@@ -123,6 +161,7 @@ def main():
                 pass
             else:
                 raise AssertionError("HKT section end corruption was not rejected")
+    fixture_motion_metadata()
     for item in (
         "hkPackfileHeader", "HktMagic", "MaxFiles = 4096",
         "MaxBatchBytes", "CountFixups", "__classnames__",
@@ -132,6 +171,10 @@ def main():
         "ReadSections", "No verified HKT section-header layout.",
         "FormatFields", "48, 48, 64",
         "No extracted HKT files selected.", "File.WriteAllText",
+        "ReadMotionMetadata", "CheckedInt", "SafeAsciiString",
+        "Duration seconds:", "Binding track->bone index entries:",
+        "Binding does not point to this animation", "MappingCount" if False else
+        "Track-map size/capacity disagrees with animation",
         "CollectPointers", "PointerRef", "ObjectRef", "Header bytes (raw, up to 96)",
         "Typed object references:", "Verified section layout:",
     ):
@@ -140,7 +183,7 @@ def main():
     assert "Editor/XBXSkellHktMotionAudit.cs" in BUILDER
     assert "Editor/XBXSkellHktMotionAudit.cs.meta" in BUILDER
     assert "HKT" in README and "AnimationClip" in README
-    print("Synthetic HKT 48/16, 48/20, 64/20 section layouts, typed object references, local/global pointers and bounds OK")
+    print("Synthetic HKT layout, pointer fixups, 201-frame timing, 103-track bone map and source contracts OK")
 
 
 if __name__ == "__main__":
