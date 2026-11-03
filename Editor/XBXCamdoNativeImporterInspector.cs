@@ -66,14 +66,18 @@ namespace MusafirEx.XBX2Unity.Editor
                     XBXSkellSarAnimationAudit.ExtractSelected();
                 if (GUILayout.Button("Audit Extracted Animation HKT Packfiles"))
                     XBXSkellHktMotionAudit.RunSelected();
+                if (GUILayout.Button("Convert Selected HKT to Native Unity AnimationClip"))
+                    XBXSkellHktClipExporter.RunSelected();
                 EditorGUILayout.HelpBox(
-                    "Phase 1 reads Wii U SAR1 / 1RAS archives and safely extracts raw " +
-                    "HKT entries. Phase 2A reads native Havok packfile headers, " +
-                    "sections, object class references and fixup metadata from a selected " +
-                    ".hkt or extracted HKT folder. This audit does NOT decode compressed " +
-                    "spline keyframes, bone mapping, duration or root motion, and does " +
-                    "not create Unity AnimationClips or overwrite material assets.",
-                    MessageType.Warning);
+                    "Phase 2F can decode verified Havok 2013 32-bit, single-block " +
+                    "spline transform tracks into a genuine AnimationClip. Select one " +
+                    "motion HKT and choose the matching Skell CAMDO with a sibling " +
+                    "*_rig.hkt. The converter checks every track-to-bone index/name, " +
+                    "handles imported flipX/modelScale, and writes a NEW .anim. " +
+                    "Unsupported codecs/multi-block layouts are refused; rig, meshes, " +
+                    "source HKT and materials remain untouched. Native playback and " +
+                    "root-motion semantics must still be checked in Unity.",
+                    MessageType.Info);
                 if (GUILayout.Button("Audit CAMDO Rig / CEA / CES Companions"))
                     XBXSkellResourceAudit.RunSelected();
             }
