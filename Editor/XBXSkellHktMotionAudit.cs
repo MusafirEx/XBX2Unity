@@ -269,6 +269,10 @@ namespace MusafirEx.XBX2Unity.Editor
                     virtuals = virtuals, exports = exports, imports = imports, end = end
                 };
             }
+            if (!sections.Any(x => x.name == "__classnames__"))
+                result.warnings.Add("No __classnames__ section; virtual object names may be unresolved.");
+            if (!sections.Any(x => x.name == "__data__"))
+                result.warnings.Add("No __data__ section; this may not be a motion HKT.");
             var root = sections[(int)rootSection];
             if (rootOffset >= root.local)
                 result.warnings.Add("Root offset is outside normal object-data span.");
@@ -305,7 +309,8 @@ namespace MusafirEx.XBX2Unity.Editor
                             at.ToString("X"));
                         continue;
                     }
-                    string className = Ascii(data, classSection.start + (int)classOffset, 128);
+                    string className = Ascii(data, classSection.start + (int)classOffset,
+                        Math.Min(128, classSection.local - (int)classOffset));
                     if (!ValidClassName(className))
                     {
                         result.warnings.Add("Invalid class string at 0x" + at.ToString("X"));
