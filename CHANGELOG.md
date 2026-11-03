@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0 - 2026-11-03 (Skell Animation Phase 1)
+- Identify the source of Wii U Skell battle animation outside CAMDO: `hkc.cpk/dl/<skell-id>.sar` typically contains named Havok `.hkt` motion entries, whereas `*_rig.hkt` beside CAMDO is the skeleton. CEA/CES remain event/auxiliary resources and are not misidentified as keyframe data.
+- Add `XBXSkellSarAnimationAudit` read-only inspection of known `1RAS` archives with bounded entry counts, size/offset validation, endianness checks, entry names, data magic and cautious Havok animation codec class-name hints.
+- Add explicit extraction of raw SAR entries without writing back to source game archives, using sanitized filenames and non-overwriting output. The Animation tab now has Audit Original Skell .sar and Extract Raw Animation HKT Entries actions. Audit logs go to `XBX_Exports/AnimationAudits/` (outside imported Assets).
+- No fake AnimationClips or invented bone keyframes. Actual Havok animation clip decoding, timing, bone paths and root motion require examination of extracted Skell motion HKT samples. Unsupported SAR variants report the observed header instead of guessing.
+- All existing model, HKT rig, skinning, texture/channel mapping and external `.mat` code remain unchanged. CI checks source contracts and synthetic 1RAS table golden; live animation HKT and Unity editor validation still outstanding.
+
+
 ## 0.9.4 - 2026-11-03
 - Use a separate linear-space BC1 `_RGB` companion texture when sampling Skell paint/body/glow channel masks. Before this fix, source mask RGB values were imported as sRGB color and gamma-decoded by the GPU, altering mid-range coverage and the effect of mask gain/threshold.
 - Keep the original sRGB MTXT texture and its existing MXMD/albedo selection intact; only the generated layer-preview `_PaintMask` binding uses the linear twin. No change to the original CAMDO/CASMT data or BC1 bytes.
