@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.1 - 2026-11-03 (Havok section-header layout investigation)
+- Investigate real extracted `0006_001012_hv_park_ed_anm.hkt`: the Phase 2A audit reported `Bad section bounds: __types__`.
+- Try validated Havok section layouts 48-byte/+0x10, 48-byte/+0x14, and 64-byte/+0x14 rather than silently treating every archive as one layout; reject layouts that fail any section name/offset check.
+- On failure report candidate format plus raw section offset words in hexadecimal, enabling diagnosis without assuming the HKT is corrupt.
+- Expand synthetic fixture regression tests to cover both endianness variants and all three layouts. No game HKT is modified, and animation tracks remain undecoded.
+
+
 ## 0.11.0 - 2026-11-03 (Skell animation Phase 2A)
 - Add read-only **Havok 2013 HKT animation packfile metadata audit** for one extracted `.hkt` or a selected folder (up to 4096 files), intended for the user's 444 motion entries from `dl099100.sar`.
 - Parse binary packfile header, little/big endianness, section descriptors, root object reference, bounded local/global/virtual fixup tables, and virtual class names. Report `hkaSplineCompressedAnimation`, `hkaAnimationBinding`, `hkaAnimationContainer` class references per file and in aggregate.

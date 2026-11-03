@@ -44,6 +44,12 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell Animation Phase 2A — Havok HKT section layout diagnostics (v0.11.1)
+
+A real extracted Wii U motion sample `0006_001012_hv_park_ed_anm.hkt` (22,336 bytes) produced `Bad section bounds: __types__` in v0.11.0. This is a **parser/section-layout verification failure**, not proof the game file is corrupt. v0.11.1 now checks three known Havok section-header metadata layouts (48-byte with offset fields at +0x10; 48-byte at +0x14; 64-byte at +0x14). It accepts a layout only when all section names, offsets and bounds validate, and reports the raw seven 32-bit section words in hexadecimal when each candidate fails.
+
+After upgrading, select the extracted HKT sample in Unity and rerun **Tools > XBX2Unity > Animation > Audit Extracted HKT Packfiles**. If none of the known layouts passes, share the new report, especially the `No verified HKT section-header layout` error with raw offset words. The file is never modified. Actual compressed spline decoding, track binding and Unity AnimationClip generation are not implemented in this patch.
+
 ## Skell Animation Phase 2A - native Wii U Havok HKT packfile audit (v0.11.0)
 
 The original `hkc.cpk` Skell archives contain real animation files; on `dl099100.sar`, the user confirmed extraction of **444** indexed `*_anm.hkt` files into `Assets/XBX/ANimation`. Unity still sees these as `DefaultAsset`, **not** `AnimationClip`.
