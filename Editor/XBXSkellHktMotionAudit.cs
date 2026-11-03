@@ -94,6 +94,7 @@ namespace MusafirEx.XBX2Unity.Editor
             internal readonly List<ObjectRef> objects = new List<ObjectRef>();
             internal readonly List<PointerRef> pointers = new List<PointerRef>();
             internal MotionProbe motion;
+            internal readonly List<string> splineDiagnostics = new List<string>();
             internal bool Valid { get { return string.IsNullOrEmpty(error); } }
             internal int Count(string className)
             {
@@ -185,7 +186,7 @@ namespace MusafirEx.XBX2Unity.Editor
             var results = new List<Result>(paths.Length);
             foreach (string path in paths)
             {
-                try { results.Add(Read(path)); }
+                try { results.Add(Read(path, paths.Length == 1)); }
                 catch (Exception ex)
                 {
                     results.Add(new Result { path = path, error = ex.Message });
@@ -285,6 +286,8 @@ namespace MusafirEx.XBX2Unity.Editor
                         sb.AppendLine("    ... " + (m.trackToBone.Length - displayed) +
                             " additional mapping entries (select one HKT for complete list).");
                 }
+                foreach (string diagnostic in r.splineDiagnostics)
+                    sb.AppendLine("  " + diagnostic);
                 foreach (ObjectRef obj in r.objects.OrderBy(x => x.section)
                     .ThenBy(x => x.offset).Take(32))
                 {
@@ -321,7 +324,7 @@ namespace MusafirEx.XBX2Unity.Editor
             return sb.ToString();
         }
 
-        internal static Result Read(string path)
+        internal static Result Read(string path, bool verboseSplineProbe = false)
         {
             FileInfo fi = new FileInfo(path);
             if (fi.Length < 208 || fi.Length > MaxFileBytes)
@@ -446,6 +449,14 @@ namespace MusafirEx.XBX2Unity.Editor
             catch (InvalidDataException ex)
             {
                 result.warnings.Add("Phase 2C metadata not verified: " + ex.Message);
+            }
+            if (verboseSplineProbe && result.motion != null)
+            {
+                try { ProbeSplineStream(data, sections, result); }
+                catch (InvalidDataException ex)
+                {
+                    result.warnings.Add("Phase 2D raw byte probe not available: " + ex.Message);
+                }
             }
             if (result.virtualFixups == 0)
                 result.warnings.Add("No virtual-fixup class references found; metadata incomplete.");
@@ -694,6 +705,136 @@ namespace MusafirEx.XBX2Unity.Editor
                 sb.Append(data[start + i].ToString("X2"));
             }
             return sb.ToString();
+        }
+
+
+        // Phase 2D is a bounded diagnostic of REAL input bytes. A 16-byte
+        // fixup stride is not proof that the records contain spline samples.
+        // Never create sampled poses or assign Unity bone curves here.
+        private static void ProbeSplineStream(byte[] data, Section[] sections,
+            Result result)
+        {
+            ObjectRef anim = result.objects.FirstOrDefault(o =>
+                o.className == "hkaSplineCompressedAnimation");
+            if (anim == null) return;
+            Section sec = sections[anim.section];
+            int typedEnd = NextObjectOffset(result.objects, anim, sec.local);
+            var lines = result.splineDiagnostics;
+            lines.Add("PHASE 2D RAW SPLINE LAYOUT PROBE (uninterpreted source bytes):");
+            lines.Add("  Spline object rel=0x" + anim.offset.ToString("X") +
+                " | next typed object=0x" + typedEnd.ToString("X"));
+            lines.Add("  Extended spline prefix (160 bytes max): " +
+                PreviewSection(data, sec, anim.offset, 160));
+
+            List<PointerRef> local = result.pointers.Where(p =>
+                !p.isGlobal && p.section == anim.section &&
+                p.targetSection == anim.section &&
+                p.source >= anim.offset && p.source < typedEnd)
+                .OrderBy(p => p.source).ToList();
+            int bestBegin = -1;
+            int bestCount = 0;
+            for (int i = 0; i < local.Count; i++)
+            {
+                int count = 1;
+                while (i + count < local.Count &&
+                    local[i + count].source - local[i + count - 1].source == 16 &&
+                    local[i + count].target - local[i + count - 1].target == 16)
+                    count++;
+                if (count > bestCount) { bestBegin = i; bestCount = count; }
+                i += count - 1;
+            }
+            if (bestBegin >= 0 && bestCount >= 4)
+            {
+                PointerRef first = local[bestBegin];
+                PointerRef last = local[bestBegin + bestCount - 1];
+                lines.Add("  Repeating 16-byte local pointer run: count=" + bestCount +
+                    " src=[0x" + first.source.ToString("X") + "..0x" +
+                    last.source.ToString("X") + "] target=[0x" +
+                    first.target.ToString("X") + "..0x" + last.target.ToString("X") + "]");
+                lines.Add("  Run count equals transform track count: " +
+                    (bestCount == result.motion.trackCount) +
+                    " (structural correlation ONLY; no keyframe interpretation)");
+                int[] positions = { 0, 1, bestCount / 2, bestCount - 2, bestCount - 1 };
+                int lastPosition = -1;
+                foreach (int pos in positions)
+                {
+                    if (pos == lastPosition || pos < 0 || pos >= bestCount) continue;
+                    lastPosition = pos;
+                    PointerRef item = local[bestBegin + pos];
+                    lines.Add("  Candidate record " + pos + " source=0x" +
+                        item.source.ToString("X") + " target=0x" +
+                        item.target.ToString("X") + " raw16: " +
+                        PreviewSection(data, sec, item.target, 16));
+                }
+                int gapStart = last.target + 16;
+                if (gapStart < typedEnd && gapStart >= 0)
+                {
+                    int gap = typedEnd - gapStart;
+                    lines.Add("  Unclassified interval AFTER pointer targets: rel=[0x" +
+                        gapStart.ToString("X") + "..0x" +
+                        typedEnd.ToString("X") + "), bytes=" + gap +
+                        " (not necessarily a compressed stream)");
+                    lines.Add("    First 32 bytes: " +
+                        PreviewSection(data, sec, gapStart, 32));
+                    if (gap > 32)
+                        lines.Add("    Last 32 bytes: " +
+                            PreviewSection(data, sec, typedEnd - 32, 32));
+                }
+            }
+            else
+                lines.Add("  No long 16-byte-stride pointer run found; inspect per-file fixups.");
+
+            ObjectRef reference = result.objects.FirstOrDefault(o =>
+                o.className == "hkaDefaultAnimatedReferenceFrame");
+            if (reference != null && result.motion.referenceFrameSamples > 0 &&
+                result.motion.referenceFrameSamples16Bytes)
+            {
+                PointerRef samples = GetPointer(result, reference, 0x34, false);
+                if (samples != null && samples.targetSection < sections.Length)
+                {
+                    Section sampleSection = sections[samples.targetSection];
+                    int n = result.motion.referenceFrameSamples;
+                    if ((long)samples.target + (long)n * 16 <= sampleSection.local)
+                    {
+                        lines.Add("  Reference frame: " + n +
+                            " x 16-byte records; raw values, not decoded root motion");
+                        int[] previewIndex = { 0, 1, n - 2, n - 1 };
+                        int previous = -1;
+                        foreach (int frame in previewIndex)
+                        {
+                            if (frame < 0 || frame >= n || frame == previous) continue;
+                            previous = frame;
+                            int at = samples.target + frame * 16;
+                            lines.Add("    Frame " + frame +
+                                " rel=0x" + at.ToString("X") +
+                                " bytes: " + PreviewSection(data, sampleSection, at, 16) +
+                                " | BE/LE float4 (unverified semantics): " +
+                                ReadFloat4(data, sampleSection.start + at, result.bigEndian));
+                        }
+                    }
+                }
+            }
+        }
+
+        private static string PreviewSection(byte[] data, Section section,
+            int relative, int wanted)
+        {
+            if (relative < 0 || relative >= section.local || wanted <= 0)
+                return "(outside validated data)";
+            int size = Math.Min(wanted, section.local - relative);
+            return HexBytes(data, section.start + relative, size);
+        }
+
+        private static string ReadFloat4(byte[] data, int absolute, bool bigEndian)
+        {
+            var values = new string[4];
+            for (int i = 0; i < 4; i++)
+            {
+                float v = F32(data, absolute + 4 * i, bigEndian);
+                values[i] = v.ToString("R",
+                    System.Globalization.CultureInfo.InvariantCulture);
+            }
+            return "(" + string.Join(", ", values) + ")";
         }
 
         // Three layouts supported for header metadata audits:
