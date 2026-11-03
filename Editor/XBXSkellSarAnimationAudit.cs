@@ -18,7 +18,7 @@ namespace MusafirEx.XBX2Unity.Editor
         private const int MaxEntries = 4096;
         private const long MaxArchiveBytes = 512L * 1024 * 1024;
         private const int HeaderBytes = 160;
-        private const int EntryBytes = 64;
+        private const int EntryBytes = 64; // SAR v0x101/0x102; v0x210 uses 96.
         private static readonly byte[] HktMagic =
             { 0x57, 0xE0, 0xE0, 0x57, 0x10, 0xC0, 0xC0, 0x10 };
 
