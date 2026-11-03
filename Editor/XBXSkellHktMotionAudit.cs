@@ -34,6 +34,25 @@ namespace MusafirEx.XBX2Unity.Editor
             internal int end;
         }
 
+        // Entries are grounded in validated Havok virtual fixups. These are
+        // typed object STARTS, not inferred animation channels or keyframes.
+        internal sealed class ObjectRef
+        {
+            internal int section;
+            internal int offset;
+            internal int absolute;
+            internal string className;
+            internal string headerHex;
+        }
+        internal sealed class PointerRef
+        {
+            internal int section;
+            internal int source;
+            internal int targetSection;
+            internal int target;
+            internal bool isGlobal;
+        }
+
         internal sealed class Result
         {
             internal string path;
@@ -42,6 +61,8 @@ namespace MusafirEx.XBX2Unity.Editor
             internal bool bigEndian;
             internal int pointerBytes;
             internal int sectionCount;
+            internal int sectionStride;
+            internal int sectionFieldsOffset;
             internal string rootClass = "unresolved";
             internal int localFixups;
             internal int globalFixups;
@@ -50,6 +71,8 @@ namespace MusafirEx.XBX2Unity.Editor
             internal readonly Dictionary<string, int> classes =
                 new Dictionary<string, int>(StringComparer.Ordinal);
             internal readonly List<string> warnings = new List<string>();
+            internal readonly List<ObjectRef> objects = new List<ObjectRef>();
+            internal readonly List<PointerRef> pointers = new List<PointerRef>();
             internal bool Valid { get { return string.IsNullOrEmpty(error); } }
             internal int Count(string className)
             {
@@ -165,6 +188,8 @@ namespace MusafirEx.XBX2Unity.Editor
             sb.AppendLine("NOTICE: Duration, frame rate, track-to-bone binding, spline keys " +
                 "and root motion are unknown until native animation decoding.");
             sb.AppendLine("NOTICE: Input HKT, Skell rigs, meshes, materials and .mat files are untouched.");
+            sb.AppendLine("Phase 2B: object offsets are real virtual-fixup references; headers are raw bytes, NOT decoded Havok fields.");
+            bool includeHeaders = results.Count == 1;
             sb.AppendLine();
             sb.AppendLine("Class references aggregated from validated Havok virtual fixups:");
             foreach (var item in counts.OrderByDescending(x => x.Value).ThenBy(x => x.Key))
@@ -185,6 +210,8 @@ namespace MusafirEx.XBX2Unity.Editor
                     (r.bigEndian ? "Big" : "Little") + "-endian, pointer bytes=" +
                     r.pointerBytes + ", sections=" + r.sectionCount +
                     ", data bytes=" + r.dataBytes);
+                sb.AppendLine("  Verified section layout: stride=" + r.sectionStride +
+                    " bytes, fields=+0x" + r.sectionFieldsOffset.ToString("X"));
                 sb.AppendLine("  Root object: " + r.rootClass);
                 sb.AppendLine("  Fixups: local=" + r.localFixups +
                     ", global=" + r.globalFixups + ", virtual=" + r.virtualFixups);
@@ -196,6 +223,38 @@ namespace MusafirEx.XBX2Unity.Editor
                 foreach (var item in r.classes.OrderByDescending(x => x.Value).ThenBy(x => x.Key)
                     .Take(12))
                     sb.AppendLine("  Type: " + item.Key + " x" + item.Value);
+                sb.AppendLine("  Typed object references: " + r.objects.Count +
+                    " | Validated pointer references: " + r.pointers.Count);
+                foreach (ObjectRef obj in r.objects.OrderBy(x => x.section)
+                    .ThenBy(x => x.offset).Take(32))
+                {
+                    sb.AppendLine("  Object " + obj.className +
+                        " section=" + obj.section +
+                        " rel=0x" + obj.offset.ToString("X") +
+                        " abs=0x" + obj.absolute.ToString("X"));
+                    if (includeHeaders)
+                    {
+                        sb.AppendLine("    Header bytes (raw, up to 96): " + obj.headerHex);
+                        int linked = 0;
+                        foreach (PointerRef ptr in r.pointers.Where(p =>
+                            p.section == obj.section &&
+                            p.source >= obj.offset &&
+                            p.source < NextObjectOffset(r.objects, obj, r.dataBytes)))
+                        {
+                            if (linked < 32)
+                                sb.AppendLine("    " + (ptr.isGlobal ? "GLOBAL" : "LOCAL") +
+                                    " pointer src=0x" + ptr.source.ToString("X") +
+                                    " -> section=" + ptr.targetSection +
+                                    " rel=0x" + ptr.target.ToString("X"));
+                            linked++;
+                        }
+                        if (linked > 32)
+                            sb.AppendLine("    ... " + (linked - 32) +
+                                " additional pointers omitted.");
+                    }
+                }
+                if (r.objects.Count > 32)
+                    sb.AppendLine("  ... more typed objects omitted.");
                 foreach (string warning in r.warnings)
                     sb.AppendLine("  WARNING: " + warning);
             }
@@ -249,9 +308,8 @@ namespace MusafirEx.XBX2Unity.Editor
             int fieldsOffset;
             var sections = ReadSections(data, bigEndian, (int)numberSections,
                 out headerStride, out fieldsOffset);
-            result.warnings.Add("Verified section headers: stride=" +
-                headerStride + " bytes, first offset=+0x" +
-                fieldsOffset.ToString("X") + ".");
+            result.sectionStride = headerStride;
+            result.sectionFieldsOffset = fieldsOffset;
             if (!sections.Any(x => x.name == "__classnames__"))
                 result.warnings.Add("No __classnames__ section; virtual object names may be unresolved.");
             if (!sections.Any(x => x.name == "__data__"))
@@ -301,9 +359,25 @@ namespace MusafirEx.XBX2Unity.Editor
                     }
                     int prev; result.classes.TryGetValue(className, out prev);
                     result.classes[className] = prev + 1;
+                    result.objects.Add(new ObjectRef {
+                        section = i, offset = (int)objectOffset,
+                        absolute = sec.start + (int)objectOffset,
+                        className = className
+                    });
                     if (i == rootSection && objectOffset == rootOffset)
                         result.rootClass = className;
                 }
+            }
+            // Pointer records can locate hkaAnimationBinding's internal
+            // hkArray fields and its referenced animation object. They do not
+            // prove element counts, data types, track mapping or clip duration.
+            CollectPointers(data, sections, bigEndian, result);
+            foreach (ObjectRef obj in result.objects)
+            {
+                Section sec = sections[obj.section];
+                int available = Math.Max(0, sec.local - obj.offset);
+                int length = Math.Min(96, available);
+                obj.headerHex = HexBytes(data, obj.absolute, length);
             }
             if (result.virtualFixups == 0)
                 result.warnings.Add("No virtual-fixup class references found; metadata incomplete.");
@@ -313,6 +387,79 @@ namespace MusafirEx.XBX2Unity.Editor
                 result.warnings.Add("No supported animation class reference found; " +
                     "inspect HKT section layout manually.");
             return result;
+        }
+
+        private static int NextObjectOffset(List<ObjectRef> all, ObjectRef source,
+            int defaultEnd)
+        {
+            int end = defaultEnd;
+            foreach (ObjectRef other in all)
+                if (other.section == source.section && other.offset > source.offset &&
+                    other.offset < end)
+                    end = other.offset;
+            return end;
+        }
+
+        private static void CollectPointers(byte[] data, Section[] sections,
+            bool bigEndian, Result result)
+        {
+            for (int i = 0; i < sections.Length; i++)
+            {
+                Section sec = sections[i];
+                int localCount = CountFixups(data, sec, sec.local, sec.global, 8,
+                    "local fixups");
+                for (int j = 0; j < localCount; j++)
+                {
+                    int at = sec.start + sec.local + 8 * j;
+                    uint source = U32(data, at, bigEndian);
+                    uint target = U32(data, at + 4, bigEndian);
+                    if (source == uint.MaxValue) continue; // alignment/sentinel
+                    if ((long)source + 4 > sec.local || target >= sec.local)
+                    {
+                        result.warnings.Add("Invalid local pointer at 0x" + at.ToString("X"));
+                        continue;
+                    }
+                    result.pointers.Add(new PointerRef {
+                        section = i, source = (int)source, targetSection = i,
+                        target = (int)target, isGlobal = false
+                    });
+                }
+                int globalCount = CountFixups(data, sec, sec.global, sec.virtuals, 12,
+                    "global fixups");
+                for (int j = 0; j < globalCount; j++)
+                {
+                    int at = sec.start + sec.global + 12 * j;
+                    uint source = U32(data, at, bigEndian);
+                    uint targetSection = U32(data, at + 4, bigEndian);
+                    uint target = U32(data, at + 8, bigEndian);
+                    if (source == uint.MaxValue) continue;
+                    if ((long)source + 4 > sec.local ||
+                        targetSection >= sections.Length ||
+                        target >= sections[(int)targetSection].local)
+                    {
+                        result.warnings.Add("Invalid global pointer at 0x" + at.ToString("X"));
+                        continue;
+                    }
+                    result.pointers.Add(new PointerRef {
+                        section = i, source = (int)source,
+                        targetSection = (int)targetSection,
+                        target = (int)target, isGlobal = true
+                    });
+                }
+            }
+        }
+
+        private static string HexBytes(byte[] data, int start, int count)
+        {
+            if (start < 0 || count < 0 || (long)start + count > data.Length)
+                throw new InvalidDataException("Object header snapshot outside HKT file");
+            var sb = new StringBuilder(count * 3);
+            for (int i = 0; i < count; i++)
+            {
+                if (i != 0) sb.Append(' ');
+                sb.Append(data[start + i].ToString("X2"));
+            }
+            return sb.ToString();
         }
 
         // Three layouts supported for header metadata audits:

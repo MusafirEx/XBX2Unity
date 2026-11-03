@@ -44,6 +44,19 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell Animation Phase 2B — HKT typed-object offsets and pointer tracing (v0.11.2)
+
+The user's real `0000_000000_idle_anm.hkt` audit now **passes** (Havok `hk_2013.1.0-r1`, big-endian, 32-bit pointers, **48-byte section headers with fields at +0x14**). Five concrete object class references were found: `hkRootLevelContainer`, `hkaAnimationContainer`, `hkaAnimationBinding`, `hkaSplineCompressedAnimation`, `hkaDefaultAnimatedReferenceFrame`. The report counts 116 local, five global and five virtual fixup records; counts include table records and are not track counts.
+
+Version 0.11.2 extends the existing **Tools > XBX2Unity > Animation > Audit Extracted HKT Packfiles** report without changing the source `.hkt` or materials:
+
+- List each validated typed object's **Havok section index**, relative offset and absolute file offset from its virtual fixup.
+- Validate same-section local pointers and cross-section global pointers. For a **single selected HKT**, list up to 32 pointer references originating between each object's offset and the next typed object.
+- Print up to **96 raw header bytes** per typed object when a **single HKT** is selected, so native binding and compressed animation field layouts can be reverse-engineered against actual bytes. The bytes are **not** interpreted as frame data, arrays or duration.
+- Folder audit mode retains compact object locations and counts, omitting hexadecimal headers and detailed pointer traces.
+
+Run the audit on `Assets/XBX/ANimation/0000_000000_idle_anm.hkt` after upgrading, and share `XBX_Exports/AnimationAudits/0000_000000_idle_anm_hkt_motion_audit.txt`. The next step is to identify actual `hkaAnimationBinding` fields and spline block offsets. These fields remain unverified until binary samples are examined; **no** Unity `AnimationClip` is generated.
+
 ## Skell Animation Phase 2A — Havok HKT section layout diagnostics (v0.11.1)
 
 A real extracted Wii U motion sample `0006_001012_hv_park_ed_anm.hkt` (22,336 bytes) produced `Bad section bounds: __types__` in v0.11.0. This is a **parser/section-layout verification failure**, not proof the game file is corrupt. v0.11.1 now checks three known Havok section-header metadata layouts (48-byte with offset fields at +0x10; 48-byte at +0x14; 64-byte at +0x14). It accepts a layout only when all section names, offsets and bounds validate, and reports the raw seven 32-bit section words in hexadecimal when each candidate fails.

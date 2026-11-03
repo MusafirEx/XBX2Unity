@@ -34,7 +34,9 @@ def fixture(big_endian=True, stride=48, first_field=16):
     data_start = types_start
     local = 64
     virtual_count = len(CLASSES)
-    data_end = local + virtual_count * 12
+    local_end = local + 2 * 8
+    global_end = local_end + 12
+    data_end = global_end + virtual_count * 12
     blob = bytearray(data_start + data_end)
     blob[:8] = MAGIC
     blob[0x10:0x14] = bytes([4, 0 if big_endian else 1, 1, 1])
@@ -57,10 +59,12 @@ def fixture(big_endian=True, stride=48, first_field=16):
             (len(names),) * 5, len(names))
     section(1, "__types__", types_start, (0,) * 5, 0)
     section(2, "__data__", data_start,
-            (local, local, local, data_end, data_end), data_end)
+            (local, local_end, global_end, data_end, data_end), data_end)
     blob[classes_start:classes_start + len(names)] = names
+    struct.pack_into(endian + "4I", blob, data_start + local, 4, 8, 24, 40)
+    struct.pack_into(endian + "3I", blob, data_start + local_end, 32, 2, 8)
     for i, off in enumerate(offsets):
-        struct.pack_into(endian + "III", blob, data_start + local + 12*i,
+        struct.pack_into(endian + "III", blob, data_start + global_end + 12*i,
                          8 * i, 0, off)
     return bytes(blob)
 
@@ -79,9 +83,19 @@ def parse_fixture(data, stride=48, first_field=16):
         base, local, global_, virtual, exports, imports, end = fields[:7]
         assert local <= global_ <= virtual <= exports <= imports <= end
         assert base + end <= len(data)
-        sections.append((label, base, local, virtual, exports))
+        sections.append((label, base, local, global_, virtual, exports))
     assert [s[0] for s in sections] == ["__classnames__", "__types__", "__data__"]
-    _, base, local, virtual, exports = sections[2]
+    _, base, local, global_, virtual, exports = sections[2]
+    local_ptrs = [
+        struct.unpack_from(endian + "II", data, at)
+        for at in range(base + local, base + global_, 8)
+    ]
+    global_ptrs = [
+        struct.unpack_from(endian + "III", data, at)
+        for at in range(base + global_, base + virtual, 12)
+    ]
+    assert local_ptrs == [(4, 8), (24, 40)]
+    assert global_ptrs == [(32, 2, 8)]
     refs = []
     for at in range(base + virtual, base + exports, 12):
         position, class_index, string_off = struct.unpack_from(endian + "III", data, at)
@@ -118,13 +132,15 @@ def main():
         "ReadSections", "No verified HKT section-header layout.",
         "FormatFields", "48, 48, 64",
         "No extracted HKT files selected.", "File.WriteAllText",
+        "CollectPointers", "PointerRef", "ObjectRef", "Header bytes (raw, up to 96)",
+        "Typed object references:", "Verified section layout:",
     ):
         assert item in SOURCE, "Missing HKT audit source contract: " + item
     assert "XBXSkellHktMotionAudit.RunSelected()" in INSPECTOR
     assert "Editor/XBXSkellHktMotionAudit.cs" in BUILDER
     assert "Editor/XBXSkellHktMotionAudit.cs.meta" in BUILDER
     assert "HKT" in README and "AnimationClip" in README
-    print("Synthetic 48/16, 48/20, 64/20 Havok section layouts and class fixup bounds OK")
+    print("Synthetic HKT 48/16, 48/20, 64/20 section layouts, typed object references, local/global pointers and bounds OK")
 
 
 if __name__ == "__main__":
