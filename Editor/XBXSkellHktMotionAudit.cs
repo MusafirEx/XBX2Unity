@@ -61,6 +61,8 @@ namespace MusafirEx.XBX2Unity.Editor
             internal bool bigEndian;
             internal int pointerBytes;
             internal int sectionCount;
+            internal int sectionStride;
+            internal int sectionFieldsOffset;
             internal string rootClass = "unresolved";
             internal int localFixups;
             internal int globalFixups;
@@ -208,6 +210,8 @@ namespace MusafirEx.XBX2Unity.Editor
                     (r.bigEndian ? "Big" : "Little") + "-endian, pointer bytes=" +
                     r.pointerBytes + ", sections=" + r.sectionCount +
                     ", data bytes=" + r.dataBytes);
+                sb.AppendLine("  Verified section layout: stride=" + r.sectionStride +
+                    " bytes, fields=+0x" + r.sectionFieldsOffset.ToString("X"));
                 sb.AppendLine("  Root object: " + r.rootClass);
                 sb.AppendLine("  Fixups: local=" + r.localFixups +
                     ", global=" + r.globalFixups + ", virtual=" + r.virtualFixups);
@@ -304,9 +308,8 @@ namespace MusafirEx.XBX2Unity.Editor
             int fieldsOffset;
             var sections = ReadSections(data, bigEndian, (int)numberSections,
                 out headerStride, out fieldsOffset);
-            result.warnings.Add("Verified section headers: stride=" +
-                headerStride + " bytes, first offset=+0x" +
-                fieldsOffset.ToString("X") + ".");
+            result.sectionStride = headerStride;
+            result.sectionFieldsOffset = fieldsOffset;
             if (!sections.Any(x => x.name == "__classnames__"))
                 result.warnings.Add("No __classnames__ section; virtual object names may be unresolved.");
             if (!sections.Any(x => x.name == "__data__"))
