@@ -1,8 +1,14 @@
 # Changelog
 
+## 0.10.1 - 2026-11-03 (Wii U SAR1 parser fix)
+- Fix first in-editor failure: original Wii U `dl/*.sar` begins with `SAR1` (big-endian), not the `1RAS` (little-endian) magic used by other Xenoblade platforms. Read endianness from magic; explicitly handle `0x101` and `0x102` (64-byte entries) and `0x210` (96-byte entries).
+- For audit and extraction, validate each entry offset and size against available physical bytes. A declared archive size mismatch alone now produces an audit warning rather than rejecting archives that might have all entries present; invalid entries still stop parsing/extraction.
+- This corrects binary source discovery only: real Havok bone animation decoding and Unity `AnimationClip` generation remain future work. Validate `dl019600.sar` or another original Skell motion archive locally.
+
+
 ## 0.10.0 - 2026-11-03 (Skell Animation Phase 1)
 - Identify the source of Wii U Skell battle animation outside CAMDO: `hkc.cpk/dl/<skell-id>.sar` typically contains named Havok `.hkt` motion entries, whereas `*_rig.hkt` beside CAMDO is the skeleton. CEA/CES remain event/auxiliary resources and are not misidentified as keyframe data.
-- Add `XBXSkellSarAnimationAudit` read-only inspection of known `1RAS` archives with bounded entry counts, size/offset validation, endianness checks, entry names, data magic and cautious Havok animation codec class-name hints.
+- Add `XBXSkellSarAnimationAudit` read-only inspection of Wii U `SAR1` big-endian and `1RAS` little-endian archives, with bounded entry counts, size/offset validation, explicit 0x101/0x102 (64-byte) and 0x210 (96-byte) table handling, entry names, data magic and cautious Havok animation codec class-name hints. The initial 1RAS-only check was found incorrect by Unity Editor.log and corrected; live Wii U archive validation remains pending.
 - Add explicit extraction of raw SAR entries without writing back to source game archives, using sanitized filenames and non-overwriting output. The Animation tab now has Audit Original Skell .sar and Extract Raw Animation HKT Entries actions. Audit logs go to `XBX_Exports/AnimationAudits/` (outside imported Assets).
 - No fake AnimationClips or invented bone keyframes. Actual Havok animation clip decoding, timing, bone paths and root motion require examination of extracted Skell motion HKT samples. Unsupported SAR variants report the observed header instead of guessing.
 - All existing model, HKT rig, skinning, texture/channel mapping and external `.mat` code remain unchanged. CI checks source contracts and synthetic 1RAS table golden; live animation HKT and Unity editor validation still outstanding.

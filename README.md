@@ -44,7 +44,7 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
-## Skell Animation Phase 1 - Wii U hkc SAR sources (v0.10.0)
+## Skell Animation Phase 1 - Wii U hkc SAR sources (v0.10.1)
 
 For the **original Wii U Xenoblade Chronicles X**, Skell combat animations are typically stored under `hkc.cpk/dl/` as per-Skell `*.sar` archives (e.g. `dl019600.sar`); their entries include Havok `*.hkt` motions (idle, run, jump, arts). The `*_rig.hkt` beside a `*.camdo` is a separate **skeleton** and must not be imported as if it were an animation.
 
@@ -52,7 +52,7 @@ For the **original Wii U Xenoblade Chronicles X**, Skell combat animations are t
 2. Select the CAMDO in Unity and open **Animation > Audit Original Skell .sar Archive** (or **Tools > XBX2Unity > Animation > Audit Skell SAR**). Choose the actual `*.sar` file. The report is written under `XBX_Exports/AnimationAudits/<archive>_sar_audit.txt`.
 3. Use **Extract Raw Animation HKT Entries from .sar** to copy the source entries to an output folder you choose. Names are sanitized and prefixed with entry IDs; existing exports are not overwritten. This is raw binary extraction, **not** clip decoding.
 
-The audit supports a validated `1RAS` table variant; another header, pointer convention or HKT codec will be reported as unsupported until tested against an authentic sample. It identifies potential `hkaSplineCompressedAnimation`, `hkaDeltaCompressedAnimation`, `hkaInterleavedUncompressedAnimation` and other Havok class-name hints when present. This is *metadata*, not decoded keyframes. Source `*.hkt` still needs format-specific motion decoding, duration sampling and bone mapping before `UnityEngine.AnimationClip` import can be implemented. No placeholder motion clips are emitted.
+The audit supports `SAR1` **big-endian** headers used on Wii U and `1RAS` **little-endian** headers; version `0x101`/`0x102` uses 64-byte entry records, while `0x210` uses 96-byte records. The correct endianness is selected by the actual magic, not trial-and-error. A declared archive size exceeding the physical extracted file size is reported as a warning; each archive entry must still fit entirely within the actual file. If any entry exceeds the file bounds, the audit/extraction fails without writing partial entries. Source entries still require live validation on `dl019600.sar`. Other headers, pointer conventions or HKT codecs are reported as unsupported. It identifies potential `hkaSplineCompressedAnimation`, `hkaDeltaCompressedAnimation`, `hkaInterleavedUncompressedAnimation` and other Havok class-name hints when present. This is *metadata*, not decoded keyframes. Source `*.hkt` still needs format-specific motion decoding, duration sampling and bone mapping before `UnityEngine.AnimationClip` import can be implemented. No placeholder motion clips are emitted.
 
 **Next validation:** inspect the `dl019600.sar` audit and one extracted `*_anm.hkt` binary, compare its class/track layout with the imported Skell skeleton, then implement the first real animation clip decoder. The existing HKT rig, skinned mesh and material mappings are deliberately unchanged.
 

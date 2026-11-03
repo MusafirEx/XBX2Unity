@@ -1,7 +1,7 @@
 // Xenoblade Chronicles X Wii U animation-source discovery, Phase 1.
 // The motion archive is in hkc.cpk (for example dl/dl019600.sar); a
 // sibling *_rig.hkt beside CAMDO is the bind-pose skeleton, NOT an animation.
-// This tool reads 1RAS SAR entries and copies their raw contents on request.
+// This tool reads endian-specific SAR1 / 1RAS entries and copies their raw contents on request.
 // It never fabricates keyframes or overwrites game archives.
 #if UNITY_EDITOR
 using System;
@@ -18,7 +18,7 @@ namespace MusafirEx.XBX2Unity.Editor
         private const int MaxEntries = 4096;
         private const long MaxArchiveBytes = 512L * 1024 * 1024;
         private const int HeaderBytes = 160;
-        private const int EntryBytes = 64;
+        private const int EntryBytes = 64; // SAR v0x101/0x102; v0x210 uses 96.
         private static readonly byte[] HktMagic =
             { 0x57, 0xE0, 0xE0, 0x57, 0x10, 0xC0, 0xC0, 0x10 };
 
@@ -38,6 +38,8 @@ namespace MusafirEx.XBX2Unity.Editor
             internal bool bigEndian;
             internal uint version;
             internal long dataOffset;
+            internal long declaredFileSize;
+            internal long physicalFileSize;
             internal string sourceName;
             internal readonly List<Entry> entries = new List<Entry>();
         }
@@ -139,24 +141,18 @@ namespace MusafirEx.XBX2Unity.Editor
             if (file.Length < HeaderBytes || file.Length > MaxArchiveBytes)
                 throw new InvalidDataException("SAR archive outside safe size limit: " + file.Length);
             byte[] data = File.ReadAllBytes(path);
-            if (data[0] != (byte)'1' || data[1] != (byte)'R' ||
-                data[2] != (byte)'A' || data[3] != (byte)'S')
-                throw new InvalidDataException("Not a known 1RAS archive. Header: " +
-                    HexHeader(data) + ". The Wii U archive variant must be audited first.");
+            // The original Wii U uses "SAR1" big-endian, whereas later
+            // Xenoblade archives can use "1RAS" little-endian.
+            // Endianness follows the magic; do not guess by trying both.
+            bool bigEndian = data[0] == (byte)'S' && data[1] == (byte)'A' &&
+                data[2] == (byte)'R' && data[3] == (byte)'1';
+            bool littleEndian = data[0] == (byte)'1' && data[1] == (byte)'R' &&
+                data[2] == (byte)'A' && data[3] == (byte)'S';
+            if (!bigEndian && !littleEndian)
+                throw new InvalidDataException("Unknown SAR signature: " +
+                    HexHeader(data) + ". Expected SAR1 (Wii U) or 1RAS.");
 
-            Archive archive;
-            string leError = null;
-            try { archive = Parse(data, false); }
-            catch (InvalidDataException ex) { archive = null; leError = ex.Message; }
-            if (archive == null)
-            {
-                try { archive = Parse(data, true); }
-                catch (InvalidDataException ex)
-                {
-                    throw new InvalidDataException("1RAS little-endian: " + leError +
-                        "; big-endian: " + ex.Message);
-                }
-            }
+            Archive archive = Parse(data, bigEndian);
             archive.sourcePath = Path.GetFullPath(path);
             return archive;
         }
@@ -169,31 +165,52 @@ namespace MusafirEx.XBX2Unity.Editor
             long table = U32(data, 16, bigEndian);
             long firstData = U32(data, 20, bigEndian);
 
+            // Version 0x101 is present in the user's Wii U SAR1 header.
+            // 0x102 uses 64-byte entries, 0x210 uses 96-byte entries.
+            // Reject unknown versions rather than silently shifting names.
+            int entryBytes, nameBytes;
+            if (version == 0x101 || version == 0x102)
+            {
+                entryBytes = EntryBytes;
+                nameBytes = 52;
+            }
+            else if (version == 0x210)
+            {
+                entryBytes = 96;
+                nameBytes = 36;
+            }
+            else throw new InvalidDataException("unsupported SAR version 0x" +
+                version.ToString("X") + " (magic " +
+                (bigEndian ? "SAR1" : "1RAS") + ")");
+
             if (entryCount == 0 || entryCount > MaxEntries)
                 throw new InvalidDataException("invalid entry count " + entryCount);
-            if (table < HeaderBytes || table + (long)entryCount * EntryBytes > data.Length)
+            if (table < HeaderBytes || table + (long)entryCount * entryBytes > data.Length)
                 throw new InvalidDataException("entry table points outside archive");
             if (firstData != 0 && (firstData < HeaderBytes || firstData > data.Length))
                 throw new InvalidDataException("invalid first-data offset " + firstData);
-            if (declared != 0 && (declared < HeaderBytes || declared > data.Length))
-                throw new InvalidDataException("declared file size is not credible");
-            if (version == 0 || version > 1000000)
-                throw new InvalidDataException("unexpected version " + version);
+            // Do not reject archives solely for header/file-size mismatch:
+            // hkc.cpk extraction can yield a valid entry table even when
+            // declared size is different. Every referenced entry must still
+            // fit entirely in the physical file before any extraction.
+            if (declared != 0 && declared < HeaderBytes)
+                throw new InvalidDataException("invalid SAR declared size " + declared);
 
             var archive = new Archive
             {
                 bigEndian = bigEndian, version = version, dataOffset = firstData,
+                declaredFileSize = declared, physicalFileSize = data.LongLength,
                 sourceName = AsciiName(data, 32, 128)
             };
             for (int i = 0; i < entryCount; i++)
             {
-                int at = checked((int)(table + i * EntryBytes));
+                int at = checked((int)(table + i * entryBytes));
                 long offset = U32(data, at, bigEndian);
                 long count = U32(data, at + 4, bigEndian);
                 uint hash = U32(data, at + 8, bigEndian);
-                string name = AsciiName(data, at + 12, 52);
+                string name = AsciiName(data, at + 12, nameBytes);
                 if (count == 0) continue;
-                if (count > int.MaxValue || offset < table + entryCount * EntryBytes ||
+                if (count > int.MaxValue || offset < table + entryCount * entryBytes ||
                     offset > data.Length || count > data.Length - offset)
                     throw new InvalidDataException("entry #" + i + " outside archive bounds");
                 // Keep source names as metadata, NEVER use raw paths for extraction.
@@ -292,6 +309,12 @@ namespace MusafirEx.XBX2Unity.Editor
             s.AppendLine("Version: " + a.version + " | Endian: " +
                 (a.bigEndian ? "Big" : "Little") + " | Data offset: 0x" +
                 a.dataOffset.ToString("X"));
+            s.AppendLine("Declared file bytes: " + a.declaredFileSize);
+            s.AppendLine("Actual file bytes: " + a.physicalFileSize);
+            if (a.declaredFileSize != 0 && a.declaredFileSize != a.physicalFileSize)
+                s.AppendLine("WARNING: Header/file size mismatch; all exported " +
+                    "entries were independently checked against physical bytes. " +
+                    "A partial CPK extraction is possible.");
             s.AppendLine("Validated entries: " + a.entries.Count);
             s.AppendLine("NOTE: These are source assets, not decoded AnimationClip data.");
             s.AppendLine("NOTE: *_rig.hkt beside CAMDO is a skeleton, not this motion archive.");
