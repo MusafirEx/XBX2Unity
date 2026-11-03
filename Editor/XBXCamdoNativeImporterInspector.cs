@@ -1,5 +1,5 @@
 // Inspector structure follows EMD2Unity / BRRES2Unity Editor tab layout.
-// Rig import is opt-in; animation tab offers SAR archive inspection and raw extraction.
+// Rig import is opt-in; animation tab offers SAR/HKT metadata audits and extraction.
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.AssetImporters;
@@ -64,13 +64,15 @@ namespace MusafirEx.XBX2Unity.Editor
                     XBXSkellSarAnimationAudit.RunSelected();
                 if (GUILayout.Button("Extract Raw Animation HKT Entries from .sar"))
                     XBXSkellSarAnimationAudit.ExtractSelected();
+                if (GUILayout.Button("Audit Extracted Animation HKT Packfiles"))
+                    XBXSkellHktMotionAudit.RunSelected();
                 EditorGUILayout.HelpBox(
-                    "Phase 1 provides bounded 1RAS archive inspection, entry-name " +
-                    "reports, Havok codec class hints and safe raw extraction. " +
-                    "The extracted .hkt files are NOT Unity AnimationClips. " +
-                    "Native Havok tracks, frame timing, bone binding and root motion " +
-                    "still need to be decoded against actual animation HKT samples. " +
-                    "No fabricated clips are created and reimport does not modify them.",
+                    "Phase 1 reads Wii U SAR1 / 1RAS archives and safely extracts raw " +
+                    "HKT entries. Phase 2A reads native Havok packfile headers, " +
+                    "sections, object class references and fixup metadata from a selected " +
+                    ".hkt or extracted HKT folder. This audit does NOT decode compressed " +
+                    "spline keyframes, bone mapping, duration or root motion, and does " +
+                    "not create Unity AnimationClips or overwrite material assets.",
                     MessageType.Warning);
                 if (GUILayout.Button("Audit CAMDO Rig / CEA / CES Companions"))
                     XBXSkellResourceAudit.RunSelected();
