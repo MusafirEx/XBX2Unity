@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.3 - 2026-11-04 (HKT spline timing and binding metadata)
+- From the user's real `0000_000000_idle_anm.hkt` Phase 2B audit, identify the Havok 2013 Wii U/32-bit spline metadata: 6.6667s, 201 frames at ~30 FPS, 103 transform tracks, zero float tracks and one compressed block. These are **header fields**, not decoded keyframes.
+- Validate `hkaAnimationBinding` fixups to its animation object, original skeleton name `dl099100_Bone` and 103-element int16 track-to-bone mapping. The first track indices are 0, 62, 63, 1, 64, 65, 66, 2. Export the complete mapping to the report when one HKT is selected.
+- Expose root reference-frame sample count (201), check 16-byte record bounds and avoid making unsupported root-motion displacement claims.
+- Keep invalid/unrecognized motion field formats as metadata warnings, preserving the previously validated Havok packfile status. Unity AnimationClip and spline keyframe decoding remain pending.
+
+
 ## 0.11.2 - 2026-11-04 (Skell motion Phase 2B probe)
 - Real Wii U `0000_000000_idle_anm.hkt` successfully validated as `hk_2013.1.0-r1`, BE/32-bit, 48-byte section header, offsets at +0x14, root `hkRootLevelContainer`; classes include animation container, binding, spline codec and default animated reference frame.
 - Extend the existing read-only HKT audit to emit verified typed object offsets and validated local/global pointer locations; for a single HKT, include up to 96 raw bytes per typed object and up to 32 outgoing fixup pointers per object.

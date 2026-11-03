@@ -44,6 +44,18 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell Animation Phase 2C — spline timing and track-to-bone metadata (v0.11.3)
+
+A user-supplied **real audit** of `0000_000000_idle_anm.hkt` (Havok 2013, Wii U BE, pointer size 4) exposed typed object header bytes and resolved pointers. The inferred Havok 2013 32-bit metadata agrees internally:
+
+- `hkaSplineCompressedAnimation`: codec 3 (spline), **6.6666665 seconds**, **103 transform tracks**, **0 float tracks**, **201 frames**, **one block**, **256 max frames per block**, 412 mask/quantization bytes, **0.03333333s/frame (~30 FPS)**, 8.5s block duration with a reciprocal of ~0.117647. These scalar fields are decoded from the native big-endian object header, not generated animation keys.
+- `hkaAnimationBinding`: an original skeleton-name pointer resolves to **`dl099100_Bone`**. Its array reports **103 transform-track-to-bone indices**; the first observed indices are **0, 62, 63, 1, 64, 65, 66, 2**. A binding points to the corresponding spline object. This verifies that **track index is not always equal to skeleton bone index**.
+- `hkaDefaultAnimatedReferenceFrame`: object has matching duration and reports **201 sample entries** with a 16-byte-per-entry footprint fitting inside the data section. The actual root-motion vectors are **not** yet interpreted.
+
+v0.11.3 enhances the same **Tools > XBX2Unity > Animation > Audit Extracted HKT Packfiles** command: it recognizes verified 32-bit spline, timing and binding fields, validates cross-object animation pointer and the local skeleton-name / track-map fixups, checks metadata ranges and time-step consistency, then reports the **complete track-to-bone index mapping for a single HKT** (first eight only in folder mode). If native fields or pointers fail validation, the report warns and leaves the HKT file accepted at the packfile level; no guessed `AnimationClip` is created.
+
+**Next milestone:** Decode actual spline-compressed quaternion/translation/scale blocks and root reference-frame samples, then apply the validated track-to-bone map against a matching imported `*_rig.hkt` Skell skeleton. Native HKT/skeleton binary regression testing inside Unity is still needed.
+
 ## Skell Animation Phase 2B — HKT typed-object offsets and pointer tracing (v0.11.2)
 
 The user's real `0000_000000_idle_anm.hkt` audit now **passes** (Havok `hk_2013.1.0-r1`, big-endian, 32-bit pointers, **48-byte section headers with fields at +0x14**). Five concrete object class references were found: `hkRootLevelContainer`, `hkaAnimationContainer`, `hkaAnimationBinding`, `hkaSplineCompressedAnimation`, `hkaDefaultAnimatedReferenceFrame`. The report counts 116 local, five global and five virtual fixup records; counts include table records and are not track counts.
