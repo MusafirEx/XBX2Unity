@@ -1,6 +1,6 @@
 {
   "name": "com.musafirex.xbx2unity",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "displayName": "XBX2Unity - Xenoblade X Wii U Native CAMDO Tools",
   "description": "XBX2Unity native Skell MXMD/GX2 importer, HKT rig and source-linked materials, and Wii U SAR extraction and Havok HKT spline timing, frame-count and track-to-bone mapping audit (compressed keyframe decoding pending).",
   "unity": "2022.3",
