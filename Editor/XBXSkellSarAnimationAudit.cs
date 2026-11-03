@@ -38,6 +38,8 @@ namespace MusafirEx.XBX2Unity.Editor
             internal bool bigEndian;
             internal uint version;
             internal long dataOffset;
+            internal long declaredFileSize;
+            internal long physicalFileSize;
             internal string sourceName;
             internal readonly List<Entry> entries = new List<Entry>();
         }
@@ -187,14 +189,17 @@ namespace MusafirEx.XBX2Unity.Editor
                 throw new InvalidDataException("entry table points outside archive");
             if (firstData != 0 && (firstData < HeaderBytes || firstData > data.Length))
                 throw new InvalidDataException("invalid first-data offset " + firstData);
-            if (declared != 0 && (declared < HeaderBytes || declared > data.Length))
-                throw new InvalidDataException("declared file size 0x" +
-                    declared.ToString("X") + " exceeds available archive 0x" +
-                    data.Length.ToString("X") + " (truncated or wrong file)");
+            // Do not reject archives solely for header/file-size mismatch:
+            // hkc.cpk extraction can yield a valid entry table even when
+            // declared size is different. Every referenced entry must still
+            // fit entirely in the physical file before any extraction.
+            if (declared != 0 && declared < HeaderBytes)
+                throw new InvalidDataException("invalid SAR declared size " + declared);
 
             var archive = new Archive
             {
                 bigEndian = bigEndian, version = version, dataOffset = firstData,
+                declaredFileSize = declared, physicalFileSize = data.LongLength,
                 sourceName = AsciiName(data, 32, 128)
             };
             for (int i = 0; i < entryCount; i++)
@@ -304,6 +309,12 @@ namespace MusafirEx.XBX2Unity.Editor
             s.AppendLine("Version: " + a.version + " | Endian: " +
                 (a.bigEndian ? "Big" : "Little") + " | Data offset: 0x" +
                 a.dataOffset.ToString("X"));
+            s.AppendLine("Declared file bytes: " + a.declaredFileSize);
+            s.AppendLine("Actual file bytes: " + a.physicalFileSize);
+            if (a.declaredFileSize != 0 && a.declaredFileSize != a.physicalFileSize)
+                s.AppendLine("WARNING: Header/file size mismatch; all exported " +
+                    "entries were independently checked against physical bytes. " +
+                    "A partial CPK extraction is possible.");
             s.AppendLine("Validated entries: " + a.entries.Count);
             s.AppendLine("NOTE: These are source assets, not decoded AnimationClip data.");
             s.AppendLine("NOTE: *_rig.hkt beside CAMDO is a skeleton, not this motion archive.");
