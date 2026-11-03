@@ -44,6 +44,27 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell Animation Phase 2E — annotation-name table and packed spline bytes (v0.11.5)
+
+The real Phase 2D report from `0000_000000_idle_anm.hkt` confirms that the observed **103 × 16-byte pointer run is an array of printable bone-like annotation names**, **not** an array of compressed spline samples. Examples: annotation 0 `dl099100_Bone`, 1 `EX_UVA`, 51 `JU_backE_L`, 101 `EX_amorE_R`, 102 `EX_amorF_R`. The 103-entry `hkaAnimationBinding` track-to-bone map remains a separate, already verified index array; matching the labels and bone indices by position is a useful hypothesis but not proof of binding to the imported `*_rig.hkt`.
+
+The same report reveals a plausible **single-block packed spline-data layout** between section-relative `0xE40` and `0x17D0`:
+
+| Section-relative range | Size | Interpreted role |
+| --- | ---: | --- |
+| `0xE40..0xE50` | 16 | `m_blockOffsets` (one uint32, value 0, aligned) |
+| `0xE50..0xE60` | 16 | `m_floatBlockOffsets` (one uint32, value 2408, aligned) |
+| `0xE60..0x17D0` | **2416** | `m_data` — actual compressed source bytes, **not yet decoded** |
+
+The `hkaSplineCompressedAnimation` header declares one block, zero transform/float offset entries, 2416 `m_data` bytes and 412 mask/quantization bytes. Together with the observed 2,448-byte interval and first 32 bytes, these counts and alignment make the packed layout a strong **candidate** that the auditor can validate byte-for-byte against each selected HKT. This is not a claim of correct quaternion/position B-spline decoding.
+
+Run **Tools > XBX2Unity > Animation > Audit Extracted HKT Packfiles** on one `.hkt` with **v0.11.5**. The new **PHASE 2E** section will:
+- validate the `hkaAnnotationTrack` pointer and 103 ASCII labels (up to 16 bytes each), list every annotation label side by side with the existing binding bone index, and explicitly state that they are not decoded keyframes;
+- verify descriptor array counts/capacities, 16-byte alignment, physical object boundary and first block offsets before classifying `m_data`;
+- emit the **first and last 64 bytes**, **SHA-256**, and **Base64 of the exact raw `m_data`** when the data is at most 8 KiB (the idle sample should be ~2416 bytes). For larger data, the audit omits the Base64 and requests the original HKT instead.
+
+The Base64 section is provided for direct analysis of real source bytes; it does not create Unity animations or overwrite input game files. **Next:** validate the packed spline format using the Base64 payload and independently inspect the Skell `*_rig.hkt` hierarchy before binding animation tracks to nodes.
+
 ## Skell Animation Phase 2D — source-byte probe for spline data (v0.11.4)
 
 The real `0000_000000_idle_anm.hkt` audit confirms **201 frames at ~30 FPS**, **103 transform tracks**, and an exact, non-duplicated permutation of **bone indices 0–102**. The original binding names `dl099100_Bone`; compressed keyframes have **not** been decoded.

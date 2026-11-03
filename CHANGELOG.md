@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.5 - 2026-11-04 (HKT Phase 2E source annotation and packed-data audit)
+- Correct Phase 2D interpretation: the 103 consecutive 16-byte pointer targets contain printable `hkaAnnotationTrack` name strings (e.g. `dl099100_Bone`, `EX_UVA`), **not** compressed keyframe records.
+- Verify 103 bounded ASCII name entries against the animation annotation array pointer/count/capacity, list their names beside the existing track-to-bone index mapping as an explicitly unverified positional association.
+- Recognize, with strict count/bounds/alignment checks, a 2,448-byte packed interval comprising two 16-byte offset tables and a **2,416-byte `m_data` compressed source blob** for the user's single-block idle sample.
+- For individual HKT audits, include compressed data SHA-256, first/last 64 bytes and exact Base64 for sources at most 8 KiB so the data can be reverse-engineered without manual hex extraction.
+- Skip unsupported layouts with read-only diagnostics; no HKT writes or fictitious AnimationClip/keyframes.
+
+
 ## 0.11.4 - 2026-11-04 (HKT Phase 2D raw stream reconnaissance)
 - Confirm from the user's full `0000_000000_idle_anm.hkt` audit that its **103 track-to-bone entries are a unique permutation of 0–102**; binding and frame timing remain verified.
 - Add a **read-only** diagnostic for individual HKT files: raw spline header prefix, consecutive 16-byte local pointer-run analysis and samples, bounded unclassified interval previews, and first/last root-reference-frame sample previews.

@@ -6,6 +6,8 @@ purpose-built synthetic bytes, not spline-keyframe decoding or Unity runtime.
 """
 from pathlib import Path
 import struct
+import base64
+import hashlib
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "Editor/XBXSkellHktMotionAudit.cs").read_text(encoding="utf-8")
@@ -177,6 +179,55 @@ def fixture_phase2d_raw_pointer_probe():
     assert b"\\0" != b"not a keyframe"
 
 
+def fixture_phase2e_ann_and_packed_data():
+    """Synthetic 103 bounded annotation labels and single-block byte-array layout.
+
+    Values are from the observed HKT field offsets, but synthetic content must
+    not be misrepresented as compressed keys or a Unity AnimationClip.
+    """
+    count = 103
+    labels = ["dl099100_Bone", "EX_UVA"] + [f"bone{i:03d}" for i in range(2, count)]
+    label_bytes = b"".join(x.encode("ascii") + b"\0" *
+                          (16-len(x)) for x in labels)
+    assert len(label_bytes) == 103 * 16
+    assert all(len(x) < 16 for x in labels)
+    parsed = [label_bytes[i*16:(i+1)*16].split(b"\0", 1)[0].decode("ascii")
+              for i in range(count)]
+    assert parsed == labels
+    header = bytearray(0x90)
+    struct.pack_into(">II", header, 0x20, count, 0x80000067)
+    values = ((0x44, 1), (0x50, 1), (0x5c, 0),
+              (0x68, 0), (0x74, 0x970))
+    for field, size in values:
+        struct.pack_into(">III", header, field, 0, size, 0x80000000 | size)
+    counts = [struct.unpack_from(">I", header, field + 4)[0]
+              for field, _ in values]
+    assert counts == [1, 1, 0, 0, 2416]
+
+    gap_start = 0xE40
+    typed_end = 0x17D0
+    align16 = lambda n: (n+15)//16*16
+    blocks_at = gap_start
+    floats_at = align16(blocks_at + counts[0]*4)
+    data_at = align16(floats_at + counts[1]*4)
+    assert (blocks_at, floats_at, data_at) == (0xE40, 0xE50, 0xE60)
+    assert typed_end - data_at == counts[4] == 2416
+
+    region = bytearray(typed_end-gap_start)
+    struct.pack_into(">I", region, blocks_at-gap_start, 0)
+    struct.pack_into(">I", region, floats_at-gap_start, 0x968)
+    synthetic_payload = bytes((i*17+5) & 0xff for i in range(counts[4]))
+    region[data_at-gap_start:] = synthetic_payload
+    assert struct.unpack_from(">I", region, floats_at-gap_start)[0] == 2408
+    assert len(synthetic_payload) == 2416 and len(region) == 2448
+    encoded = base64.b64encode(region[data_at-gap_start:]).decode("ascii")
+    assert base64.b64decode(encoded) == synthetic_payload
+    assert len(hashlib.sha256(synthetic_payload).hexdigest()) == 64
+    # Reject one-byte-short declared data before accepting the packed layout.
+    assert data_at + counts[4] - 1 != typed_end
+    # No guessed pose curves or interpolation frames are created here.
+
+
 def main():
     for big in (True, False):
         for stride, first_field in ((48, 16), (48, 20), (64, 20)):
@@ -194,6 +245,7 @@ def main():
                 raise AssertionError("HKT section end corruption was not rejected")
     fixture_motion_metadata()
     fixture_phase2d_raw_pointer_probe()
+    fixture_phase2e_ann_and_packed_data()
     for item in (
         "hkPackfileHeader", "HktMagic", "MaxFiles = 4096",
         "MaxBatchBytes", "CountFixups", "__classnames__",
@@ -205,6 +257,10 @@ def main():
         "No extracted HKT files selected.", "File.WriteAllText",
         "ReadMotionMetadata", "CheckedInt", "SafeAsciiString",
         "ProbeSplineStream", "PreviewSection", "ReadFloat4",
+        "ProbeAnnotationAndPackedArrays", "TryReadAnnotationName",
+        "PHASE 2E VERIFIED ANNOTATION-NAME TABLE",
+        "m_data SHA256:", "BASE64 m_data", "END BASE64 m_data",
+        "dataAt + counts[4] != typedEnd",
         "Repeating 16-byte local pointer run:", "uninterpreted source bytes",
         "Reference frame:",
         "Duration seconds:", "Binding track->bone index entries:",
@@ -218,7 +274,7 @@ def main():
     assert "Editor/XBXSkellHktMotionAudit.cs" in BUILDER
     assert "Editor/XBXSkellHktMotionAudit.cs.meta" in BUILDER
     assert "HKT" in README and "AnimationClip" in README
-    print("Synthetic HKT headers, 103-track bone-map and Phase 2D bounded pointer-run probe OK")
+    print("Synthetic Havok header, 103 annotation labels, packed 2416-byte stream and base64 payload contracts OK")
 
 
 if __name__ == "__main__":
