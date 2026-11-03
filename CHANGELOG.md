@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.4 - 2026-11-03
+- Use a separate linear-space BC1 `_RGB` companion texture when sampling Skell paint/body/glow channel masks. Before this fix, source mask RGB values were imported as sRGB color and gamma-decoded by the GPU, altering mid-range coverage and the effect of mask gain/threshold.
+- Keep the original sRGB MTXT texture and its existing MXMD/albedo selection intact; only the generated layer-preview `_PaintMask` binding uses the linear twin. No change to the original CAMDO/CASMT data or BC1 bytes.
+- Apply to both packed and streamed MTXT records; register the linear masks as distinct CAMDO subassets and release replaced streamed records. No changes to rig, HKT skinning or external `.mat` overrides.
+- ScriptedImporter revision 15, package v0.9.4, expanded source-contract CI tests. Requires local Unity 2022.3 recompilation and visual comparison on `dl099110.camdo`; Red-channel semantics remain unknown.
+
 ## 0.9.3 - 2026-11-03
 - From direct in-game comparison of dl099110, the user identified the *Green* channel in *_RGB companion as the **Skell body mask**, and *Blue* as the **glowing/luminous parts mask**. Red is **still unidentified**. This observation does not prove global consistency across every Skell.
 - Add independent opt-in Green -> Body Color Tint and Blue -> Glow Emission Preview controls. Both default OFF; body defaults white with adjustable coverage/gain and glow defaults light blue with adjustable intensity/gain.
