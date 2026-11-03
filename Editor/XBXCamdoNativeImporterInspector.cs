@@ -1,5 +1,5 @@
 // Inspector structure follows EMD2Unity / BRRES2Unity Editor tab layout.
-// Rig and animation are labeled unsupported, not advertised as functioning.
+// Rig import is opt-in; animation tab offers SAR archive inspection and raw extraction.
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.AssetImporters;
@@ -53,15 +53,26 @@ namespace MusafirEx.XBX2Unity.Editor
             }
             else if (selectedTab == 2)
             {
-                EditorGUILayout.LabelField("Skell Animation Sources", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("Skell Motion Archive (Wii U)", EditorStyles.boldLabel);
                 EditorGUILayout.HelpBox(
-                    "CEA is a CES-related event/container resource; it is not " +
-                    "a decoded AnimationClip. The Skell pack also contains " +
-                    "parts_*, mesh_*, and effect_* CES data. Their animation " +
-                    "track formats and bone bindings require additional decoding. " +
-                    "No placeholder motion clips are produced.",
+                    "For Wii U Skells, battle motions are typically stored in hkc.cpk " +
+                    "under dl/<Skell ID>.sar, not in the sibling *_rig.hkt beside " +
+                    "CAMDO. That HKT is a skeleton. Select an extracted .sar to " +
+                    "inspect motion names and raw animation HKT entries.",
+                    MessageType.Info);
+                if (GUILayout.Button("Audit Original Skell .sar Archive"))
+                    XBXSkellSarAnimationAudit.RunSelected();
+                if (GUILayout.Button("Extract Raw Animation HKT Entries from .sar"))
+                    XBXSkellSarAnimationAudit.ExtractSelected();
+                EditorGUILayout.HelpBox(
+                    "Phase 1 provides bounded 1RAS archive inspection, entry-name " +
+                    "reports, Havok codec class hints and safe raw extraction. " +
+                    "The extracted .hkt files are NOT Unity AnimationClips. " +
+                    "Native Havok tracks, frame timing, bone binding and root motion " +
+                    "still need to be decoded against actual animation HKT samples. " +
+                    "No fabricated clips are created and reimport does not modify them.",
                     MessageType.Warning);
-                if (GUILayout.Button("Audit Skell Animation Companion Files"))
+                if (GUILayout.Button("Audit CAMDO Rig / CEA / CES Companions"))
                     XBXSkellResourceAudit.RunSelected();
             }
             else
