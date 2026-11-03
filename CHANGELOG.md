@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.0 - 2026-11-03 (Skell animation Phase 2A)
+- Add read-only **Havok 2013 HKT animation packfile metadata audit** for one extracted `.hkt` or a selected folder (up to 4096 files), intended for the user's 444 motion entries from `dl099100.sar`.
+- Parse binary packfile header, little/big endianness, section descriptors, root object reference, bounded local/global/virtual fixup tables, and virtual class names. Report `hkaSplineCompressedAnimation`, `hkaAnimationBinding`, `hkaAnimationContainer` class references per file and in aggregate.
+- Integrate the audit into the CAMDO Animation tab, Tools menu and Project context menu; generate reports outside Assets to avoid modifying source HKT, rig, geometry or `.mat`.
+- Add synthetic Havok section/fixup endian/bounds tests and package manifests. Real spline/keyframe data, durations, bone-track binding and Unity `AnimationClip` conversion remain unimplemented until verified against native sample bytes.
+
+
 ## 0.10.1 - 2026-11-03 (Wii U SAR1 parser fix)
 - Fix first in-editor failure: original Wii U `dl/*.sar` begins with `SAR1` (big-endian), not the `1RAS` (little-endian) magic used by other Xenoblade platforms. Read endianness from magic; explicitly handle `0x101` and `0x102` (64-byte entries) and `0x210` (96-byte entries).
 - For audit and extraction, validate each entry offset and size against available physical bytes. A declared archive size mismatch alone now produces an audit warning rather than rejecting archives that might have all entries present; invalid entries still stop parsing/extraction.
