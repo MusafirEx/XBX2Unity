@@ -14,6 +14,8 @@ SOURCE = (ROOT / "Editor/XBXSkellHktMotionAudit.cs").read_text(encoding="utf-8")
 INSPECTOR = (ROOT / "Editor/XBXCamdoNativeImporterInspector.cs").read_text(encoding="utf-8")
 BUILDER = (ROOT / "tools/build_unitypackage.py").read_text(encoding="utf-8")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
+DECODER = (ROOT / "Editor/XBXSkellHktSplineDecoder.cs").read_text(encoding="utf-8")
+EXPORTER = (ROOT / "Editor/XBXSkellHktClipExporter.cs").read_text(encoding="utf-8")
 MAGIC = b"\x57\xe0\xe0\x57\x10\xc0\xc0\x10"
 CLASSES = ("hkRootLevelContainer", "hkaSplineCompressedAnimation",
            "hkaAnimationBinding", "hkaAnimationContainer")
@@ -228,6 +230,65 @@ def fixture_phase2e_ann_and_packed_data():
     # No guessed pose curves or interpolation frames are created here.
 
 
+def fixture_native_spline_decoder_contract():
+    """Model tested 40-bit quaternion packing and B-spline interpolation.
+
+    Source contracts run in CI without Unity. Real 103-track m_data was
+    separately validated from the uploaded text audit, not bundled here.
+    """
+    import math
+    three = 2047
+    packed_identity_w = three | (three << 12) | (three << 24) | (3 << 36)
+    assert 0 <= packed_identity_w < (1 << 40)
+    wire = packed_identity_w.to_bytes(5, "little")
+    assert len(wire) == 5
+    bits = int.from_bytes(wire, "little")
+    factor = math.sqrt(2) / 4095
+    xyz = [(((bits >> (12 * i)) & 0xfff) - 2047) * factor
+           for i in range(3)]
+    absent = (bits >> 36) & 3
+    sign = (bits >> 38) & 1
+    q = xyz[:]
+    q.insert(absent, math.sqrt(max(0, 1 - sum(v*v for v in xyz)))
+             * (-1 if sign else 1))
+    assert q == [0.0, 0.0, 0.0, 1.0]
+
+    def deboor_linear(knots, values, frame):
+        assert len(knots) == len(values) + 2
+        idx = 1 if frame < knots[len(values)] else len(values)-1
+        alpha = (frame - knots[idx]) / (knots[idx+1] - knots[idx])
+        return (1-alpha) * values[idx-1] + alpha * values[idx]
+    assert abs(deboor_linear([0, 0, 10, 10], [2.0, 4.0], 5) - 3.0) < 1e-6
+
+    # Little-endian compressed float bytes are independent of the big-endian HKT header.
+    packed = struct.pack("<4Bf", 0x45, 0x01, 0x0F, 0, 1.25)
+    assert packed[:4] == b"\x45\x01\x0f\x00"
+    assert struct.unpack_from("<f", packed, 4)[0] == 1.25
+    for phrase in (
+        "class XBXSkellHktSplineDecoder", "ReadQuat40",
+        "ReadKnotHeader", "KnotSpan", "Evaluate(",
+        "reader.Position != reader.Size", "source.blockCount != 1",
+        "source.maskAndQuantizationBytes != source.trackCount * 4",
+        "Quaternion.Normalize", "source.floatTrackCount != 0",
+    ):
+        assert phrase in DECODER, "Spline decoder source contract missing: " + phrase
+    for phrase in (
+        "class XBXSkellHktClipExporter", "ExtractNativeSpline",
+        "XBXSkellHktRig.Read", "ValidateRig", "PathForBone",
+        "Importer.GetAtPath" if False else "AssetImporter.GetAtPath",
+        "importer.flipX", "importer.modelScale",
+        "m_LocalPosition", "m_LocalRotation", "m_LocalScale",
+        "clip.SetCurve", "AssetDatabase.CreateAsset",
+        "Refusing to overwrite existing asset",
+    ):
+        assert phrase in EXPORTER, "Clip exporter source contract missing: " + phrase
+    assert "ExtractNativeSpline" in SOURCE
+    assert "packedSplineData" in SOURCE and "annotationNames" in SOURCE
+    assert "XBXSkellHktSplineDecoder.cs" in BUILDER
+    assert "XBXSkellHktClipExporter.cs" in BUILDER
+    assert "XBXSkellHktClipExporter.RunSelected()" in INSPECTOR
+
+
 def main():
     for big in (True, False):
         for stride, first_field in ((48, 16), (48, 20), (64, 20)):
@@ -246,6 +307,7 @@ def main():
     fixture_motion_metadata()
     fixture_phase2d_raw_pointer_probe()
     fixture_phase2e_ann_and_packed_data()
+    fixture_native_spline_decoder_contract()
     for item in (
         "hkPackfileHeader", "HktMagic", "MaxFiles = 4096",
         "MaxBatchBytes", "CountFixups", "__classnames__",
@@ -274,7 +336,7 @@ def main():
     assert "Editor/XBXSkellHktMotionAudit.cs" in BUILDER
     assert "Editor/XBXSkellHktMotionAudit.cs.meta" in BUILDER
     assert "HKT" in README and "AnimationClip" in README
-    print("Synthetic Havok header, 103 annotation labels, packed 2416-byte stream and base64 payload contracts OK")
+    print("Synthetic Havok metadata, spline 40-bit quaternion/de Boor, rig-path clip export and packaging contracts OK")
 
 
 if __name__ == "__main__":
