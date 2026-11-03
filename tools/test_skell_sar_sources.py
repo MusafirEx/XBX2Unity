@@ -16,7 +16,7 @@ README = (ROOT / "README.md").read_text(encoding="utf-8")
 MAGIC = b"\x57\xe0\xe0\x57\x10\xc0\xc0\x10"
 
 
-def fixture(big_endian=False, corrupt=False):
+def fixture(big_endian=False, corrupt=False, declared_overestimate=False):
     order = ">" if big_endian else "<"
     table = 160
     entry_count = 2
@@ -25,7 +25,8 @@ def fixture(big_endian=False, corrupt=False):
     bc = b"BC\0\0" + bytes(32)
     data = bytearray(start + len(hkt) + len(bc))
     data[0:4] = b"SAR1" if big_endian else b"1RAS"
-    struct.pack_into(order + "5I", data, 4, len(data), 0x101 if big_endian else 0x102,
+    struct.pack_into(order + "5I", data, 4, len(data) + (4096 if declared_overestimate else 0),
+                     0x101 if big_endian else 0x102,
                      entry_count, table, start)
     data[32:32+len(b"dl019600.sar")] = b"dl019600.sar"
     for i, (offset, payload, name) in enumerate([
@@ -45,7 +46,7 @@ def parse_fixture(data, endian):
     order = ">" if endian == "big" else "<"
     assert data[:4] == (b"SAR1" if endian == "big" else b"1RAS")
     length, version, count, table, first = struct.unpack_from(order + "5I", data, 4)
-    assert length == len(data) and 0 < count <= 4096 and version > 0
+    assert length >= 160 and 0 < count <= 4096 and version > 0
     assert table >= 160 and table + count * 64 <= len(data)
     assert 160 <= first <= len(data)
     out = []
@@ -63,6 +64,10 @@ def main():
     for big in (False, True):
         blob = fixture(big)
         rows = parse_fixture(blob, "big" if big else "little")
+        # A CPK extraction can have a header-size mismatch without
+        # making all TOC entries invalid: enforce per-entry bounds instead.
+        inflated = fixture(big, declared_overestimate=True)
+        assert parse_fixture(inflated, "big" if big else "little") == rows
         assert rows[0][0] == "000000_idle_anm.hkt"
         assert rows[0][4] == MAGIC
         assert rows[1][0] == "000001_test.bc"
@@ -82,6 +87,8 @@ def main():
         "Parse(data, bigEndian)", "version == 0x101",
         "version == 0x102", "version == 0x210",
         "name = name, nameHash = hash", "HktMagic",
+        "declaredFileSize = declared", "physicalFileSize = data.LongLength",
+        "if (a.declaredFileSize != 0 && a.declaredFileSize != a.physicalFileSize)",
         "hkaSplineCompressedAnimation", "hkaDeltaCompressedAnimation",
         "hkaInterleavedUncompressedAnimation",
         "FileMode.CreateNew", "SafeFileName", "XBX_Exports",
