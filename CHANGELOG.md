@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.2 - 2026-11-04 (Skell motion Phase 2B probe)
+- Real Wii U `0000_000000_idle_anm.hkt` successfully validated as `hk_2013.1.0-r1`, BE/32-bit, 48-byte section header, offsets at +0x14, root `hkRootLevelContainer`; classes include animation container, binding, spline codec and default animated reference frame.
+- Extend the existing read-only HKT audit to emit verified typed object offsets and validated local/global pointer locations; for a single HKT, include up to 96 raw bytes per typed object and up to 32 outgoing fixup pointers per object.
+- Make valid section layout a report metadata line, not a warning. Expand synthetic section/pointer tests for all supported layouts and both endian forms.
+- Native Havok spline keyframes, track bindings, duration and Unity AnimationClip creation remain unimplemented; no model/rig/material assets are modified.
+
+
 ## 0.11.1 - 2026-11-03 (Havok section-header layout investigation)
 - Investigate real extracted `0006_001012_hv_park_ed_anm.hkt`: the Phase 2A audit reported `Bad section bounds: __types__`.
 - Try validated Havok section layouts 48-byte/+0x10, 48-byte/+0x14, and 64-byte/+0x14 rather than silently treating every archive as one layout; reject layouts that fail any section name/offset check.
