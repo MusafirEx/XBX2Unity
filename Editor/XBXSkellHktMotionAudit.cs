@@ -208,8 +208,8 @@ namespace MusafirEx.XBX2Unity.Editor
                 " | Errors: " + (results.Count - success) +
                 " | Source bytes: " + totalBytes);
             sb.AppendLine("NOTICE: Object class references are NOT decoded bone tracks.");
-            sb.AppendLine("NOTICE: Duration, frame rate, track-to-bone binding, spline keys " +
-                "and root motion are unknown until native animation decoding.");
+            sb.AppendLine("NOTICE: Timing and track-to-bone metadata are decoded only when validated.");
+            sb.AppendLine("NOTICE: Compressed spline keyframes and root-motion semantics are NOT decoded.");
             sb.AppendLine("NOTICE: Input HKT, Skell rigs, meshes, materials and .mat files are untouched.");
             sb.AppendLine("Phase 2B: object offsets are real virtual-fixup references; headers are raw bytes, NOT decoded Havok fields.");
             bool includeHeaders = results.Count == 1;
