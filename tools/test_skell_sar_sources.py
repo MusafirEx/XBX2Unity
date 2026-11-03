@@ -24,8 +24,8 @@ def fixture(big_endian=False, corrupt=False):
     hkt = MAGIC + b"hkaSplineCompressedAnimation\0" + bytes(128)
     bc = b"BC\0\0" + bytes(32)
     data = bytearray(start + len(hkt) + len(bc))
-    data[0:4] = b"1RAS"
-    struct.pack_into(order + "5I", data, 4, len(data), 10002,
+    data[0:4] = b"SAR1" if big_endian else b"1RAS"
+    struct.pack_into(order + "5I", data, 4, len(data), 0x101 if big_endian else 0x102,
                      entry_count, table, start)
     data[32:32+len(b"dl019600.sar")] = b"dl019600.sar"
     for i, (offset, payload, name) in enumerate([
@@ -43,7 +43,7 @@ def fixture(big_endian=False, corrupt=False):
 
 def parse_fixture(data, endian):
     order = ">" if endian == "big" else "<"
-    assert data[:4] == b"1RAS"
+    assert data[:4] == (b"SAR1" if endian == "big" else b"1RAS")
     length, version, count, table, first = struct.unpack_from(order + "5I", data, 4)
     assert length == len(data) and 0 < count <= 4096 and version > 0
     assert table >= 160 and table + count * 64 <= len(data)
@@ -77,7 +77,10 @@ def main():
     required = (
         "XBXSkellSarAnimationAudit", "MaxEntries = 4096",
         "MaxArchiveBytes", "HeaderBytes = 160", "EntryBytes = 64",
-        "data[0] != (byte)'1'", "Parse(data, false)", "Parse(data, true)",
+        "bool bigEndian = data[0] == (byte)'S'",
+        "bool littleEndian = data[0] == (byte)'1'",
+        "Parse(data, bigEndian)", "version == 0x101",
+        "version == 0x102", "version == 0x210",
         "name = name, nameHash = hash", "HktMagic",
         "hkaSplineCompressedAnimation", "hkaDeltaCompressedAnimation",
         "hkaInterleavedUncompressedAnimation",
