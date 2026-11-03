@@ -21,7 +21,7 @@ def align16(n):
     return (n + 15) // 16 * 16
 
 
-def fixture(big_endian=True):
+def fixture(big_endian=True, stride=48, first_field=16):
     endian = ">" if big_endian else "<"
     names = bytearray()
     offsets = []
@@ -29,7 +29,7 @@ def fixture(big_endian=True):
         offsets.append(len(names))
         names += name.encode("ascii") + b"\0"
     names += bytes(align16(len(names)) - len(names))
-    classes_start = 0xD0
+    classes_start = 0x40 + 3 * stride
     types_start = classes_start + len(names)
     data_start = types_start
     local = 64
@@ -42,10 +42,15 @@ def fixture(big_endian=True):
     blob[0x28:0x28+len(b"hk_2013.1.0-r1")] = b"hk_2013.1.0-r1"
 
     def section(index, label, base, fixes, data_end_offset):
-        at = 0x40 + index * 48
+        at = 0x40 + index * stride
         blob[at:at+len(label)] = label.encode("ascii")
-        struct.pack_into(endian + "8I", blob, at + 16, base,
-                         *fixes, data_end_offset, 0)
+        if first_field == 16:
+            struct.pack_into(endian + "8I", blob, at + 16, base,
+                             *fixes, data_end_offset, 0)
+        else:
+            blob[at+16:at+20] = b"\xff" * 4
+            struct.pack_into(endian + "7I", blob, at + 20, base,
+                             *fixes, data_end_offset)
 
     # fixes: local, global, virtual, exports, imports
     section(0, "__classnames__", classes_start,
@@ -60,17 +65,18 @@ def fixture(big_endian=True):
     return bytes(blob)
 
 
-def parse_fixture(data):
+def parse_fixture(data, stride=48, first_field=16):
     assert data[:8] == MAGIC
     endian = ">" if data[0x11] == 0 else "<"
     count, root_section, root_offset = struct.unpack_from(endian + "III", data, 0x14)
     assert count == 3 and root_section == 2 and root_offset == 0
     sections = []
     for i in range(count):
-        at = 0x40 + i*48
+        at = 0x40 + i*stride
         label = data[at:at+16].split(b"\0", 1)[0].decode("ascii")
-        fields = struct.unpack_from(endian + "8I", data, at + 16)
-        base, local, global_, virtual, exports, imports, end, _ = fields
+        fields = struct.unpack_from(endian + ("8I" if first_field == 16 else "7I"),
+                                    data, at + first_field)
+        base, local, global_, virtual, exports, imports, end = fields[:7]
         assert local <= global_ <= virtual <= exports <= imports <= end
         assert base + end <= len(data)
         sections.append((label, base, local, virtual, exports))
@@ -90,24 +96,27 @@ def parse_fixture(data):
 
 def main():
     for big in (True, False):
-        sample = fixture(big)
-        assert [name for _, name in parse_fixture(sample)] == list(CLASSES)
-        bad = bytearray(sample)
-        # Invalid data-section end must be rejected.
-        endian = ">" if big else "<"
-        struct.pack_into(endian + "I", bad, 0xA0 + 16 + 24, len(sample) + 100)
-        try:
-            parse_fixture(bytes(bad))
-        except AssertionError:
-            pass
-        else:
-            raise AssertionError("HKT bounds corruption was not rejected")
+        for stride, first_field in ((48, 16), (48, 20), (64, 20)):
+            sample = fixture(big, stride=stride, first_field=first_field)
+            assert [name for _, name in parse_fixture(sample, stride, first_field)] == list(CLASSES)
+            bad = bytearray(sample)
+            endian = ">" if big else "<"
+            at = 0x40 + 2*stride + first_field + 24
+            struct.pack_into(endian + "I", bad, at, len(sample) + 100)
+            try:
+                parse_fixture(bytes(bad), stride, first_field)
+            except AssertionError:
+                pass
+            else:
+                raise AssertionError("HKT section end corruption was not rejected")
     for item in (
         "hkPackfileHeader", "HktMagic", "MaxFiles = 4096",
         "MaxBatchBytes", "CountFixups", "__classnames__",
         "hkaSplineCompressedAnimation", "hkaAnimationBinding",
         "m_virtualFixupsOffset" if False else "virtual fixup",
         "Root object:", "File.ReadAllBytes(path)",
+        "ReadSections", "No verified HKT section-header layout.",
+        "FormatFields", "48, 48, 64",
         "No extracted HKT files selected.", "File.WriteAllText",
     ):
         assert item in SOURCE, "Missing HKT audit source contract: " + item
@@ -115,7 +124,7 @@ def main():
     assert "Editor/XBXSkellHktMotionAudit.cs" in BUILDER
     assert "Editor/XBXSkellHktMotionAudit.cs.meta" in BUILDER
     assert "HKT" in README and "AnimationClip" in README
-    print("Synthetic Havok 2013 endian headers, fixup metadata, bounds and packaging contracts OK")
+    print("Synthetic 48/16, 48/20, 64/20 Havok section layouts and class fixup bounds OK")
 
 
 if __name__ == "__main__":
