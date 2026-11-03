@@ -18,6 +18,8 @@ namespace MusafirEx.XBX2Unity.Editor
             internal string source, sourceName;
             internal string bc1ChannelProfile;
             internal Texture2D texture;
+            // Same BC1 blocks, sampled in linear space for masks (never for albedo).
+            internal Texture2D linearMaskTexture;
             internal bool IsNormalData
             {
                 get
@@ -126,11 +128,13 @@ namespace MusafirEx.XBX2Unity.Editor
                         long start = (long)packed + n;
                         if (n == 0 || size < 112 || start < 0 ||
                             start + size > camdo.Length) continue;
-                        Record record = DecodeOne(camdo, (int)start, size, "packed", i, warnings);
+                        string sourceName = ReadName(camdo, packed, U32(camdo, p + 12));
+                        Record record = DecodeOne(camdo, (int)start, size,
+                            "packed", i, sourceName, warnings);
                         if (record != null)
                         {
                             record.usage = unchecked((int)U32(camdo, p));
-                            record.sourceName = ReadName(camdo, packed, U32(camdo, p + 12));
+                            record.sourceName = sourceName;
                             results[i] = record;
                         }
                     }
@@ -198,19 +202,24 @@ namespace MusafirEx.XBX2Unity.Editor
                 int relative = I32(header, entry + 8);
                 long start = (long)dataStart + relative;
                 if (length < 112 || start < 0 || start + length > casmt.Length) continue;
+                string sourceName = ReadName(header, pool, U32(header, entry + 12));
                 Record record = DecodeOne(casmt, (int)start, length,
-                    highToLow != null ? "high" : "low", texId, warnings);
+                    highToLow != null ? "high" : "low", texId, sourceName, warnings);
                 if (record == null) continue;
                 record.usage = unchecked((int)U32(header, entry));
-                record.sourceName = ReadName(header, pool, U32(header, entry + 12));
-                if (textures.TryGetValue(texId, out Record old) && old.texture != null)
-                    UnityEngine.Object.DestroyImmediate(old.texture);
+                record.sourceName = sourceName;
+                if (textures.TryGetValue(texId, out Record old))
+                {
+                    if (old.texture != null) UnityEngine.Object.DestroyImmediate(old.texture);
+                    if (old.linearMaskTexture != null)
+                        UnityEngine.Object.DestroyImmediate(old.linearMaskTexture);
+                }
                 textures[texId] = record;
             }
         }
 
         private static Record DecodeOne(byte[] data, int at, int length, string source,
-            int id, List<string> warnings)
+            int id, string sourceName, List<string> warnings)
         {
             int footer = at + length - 112;
             if (footer < 0 || footer + 112 > data.Length ||
@@ -256,9 +265,23 @@ namespace MusafirEx.XBX2Unity.Editor
                 // This does not change BC1/BC5 bytes or the rendered image.
                 string profile = format == 49
                     ? XBXSkellPaintChannelAudit.ProfileBc1(raw,width,height) : "";
+                // RGB companion is mask data, not sRGB albedo. Preserve the
+                // original image for opt-in base color; create a linear DXT1
+                // twin so shader channel gains and thresholds use raw values.
+                Texture2D linearMask = null;
+                if (format == 49 && !string.IsNullOrEmpty(sourceName) &&
+                    sourceName.EndsWith("_RGB", StringComparison.OrdinalIgnoreCase))
+                {
+                    linearMask = new Texture2D(width, height,
+                        TextureFormat.DXT1, false, true);
+                    linearMask.name = tex.name + "_LinearMask";
+                    linearMask.LoadRawTextureData(raw);
+                    linearMask.Apply(false, true);
+                }
                 tex.Apply(false, true);
                 return new Record { id=id, width=width, height=height, format=format,
-                    source=source, texture=tex, bc1ChannelProfile=profile };
+                    source=source, sourceName=sourceName, texture=tex,
+                    linearMaskTexture=linearMask, bc1ChannelProfile=profile };
             }
             catch (Exception e)
             {
