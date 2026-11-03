@@ -767,7 +767,12 @@ namespace MusafirEx.XBX2Unity.Editor
                         PreviewSection(data, sec, item.target, 16));
                 }
                 int gapStart = last.target + 16;
-                if (gapStart < typedEnd && gapStart >= 0)
+                bool decodedLayout = false;
+                if (bestCount == result.motion.trackCount)
+                    decodedLayout = ProbeAnnotationAndPackedArrays(
+                        data, sec, anim, result, local,
+                        bestBegin, bestCount, gapStart, typedEnd);
+                if (!decodedLayout && gapStart < typedEnd && gapStart >= 0)
                 {
                     int gap = typedEnd - gapStart;
                     lines.Add("  Unclassified interval AFTER pointer targets: rel=[0x" +
@@ -814,6 +819,181 @@ namespace MusafirEx.XBX2Unity.Editor
                     }
                 }
             }
+        }
+
+
+        // Phase 2E. The 16-byte pointer run is an hkArray of
+        // hkaAnnotationTrack entries containing *name pointers*, not
+        // compressed track/sample data. The four byte arrays/offset tables
+        // below are recognized only on a precisely bounded, self-consistent
+        // Wii U 32-bit single-block layout.
+        private static bool ProbeAnnotationAndPackedArrays(
+            byte[] data, Section sec, ObjectRef anim, Result result,
+            List<PointerRef> local, int firstIndex, int count,
+            int regionStart, int typedEnd)
+        {
+            var lines = result.splineDiagnostics;
+            PointerRef annotationArray = GetPointer(result, anim, 0x1C, false);
+            if (annotationArray == null ||
+                annotationArray.targetSection != anim.section ||
+                annotationArray.target != local[firstIndex].source)
+            {
+                lines.Add("  Annotation-array pointer does not match 16-byte run; " +
+                    "names/payload remain unclassified.");
+                return false;
+            }
+            int annotationCount = CheckedInt(U32(data, anim.absolute + 0x20,
+                result.bigEndian), 4096, "annotation track count");
+            uint annotationCap = U32(data, anim.absolute + 0x24, result.bigEndian);
+            if (annotationCount != count ||
+                (annotationCap & 0x3fffffffu) < (uint)count)
+            {
+                lines.Add("  Annotation array count/capacity differs from pointer run.");
+                return false;
+            }
+            var labels = new List<string>(count);
+            for (int i = 0; i < count; i++)
+            {
+                PointerRef ptr = local[firstIndex + i];
+                string label;
+                if (!TryReadAnnotationName(data, sec, ptr.target, 16, out label))
+                {
+                    lines.Add("  Annotation entry " + i +
+                        " not a bounded ASCII string; names remain unclassified.");
+                    return false;
+                }
+                labels.Add(label);
+            }
+            lines.Add("  Verified hkaAnnotationTrack names: " + labels.Count +
+                " (NOT spline keyframes)");
+            lines.Add("  Annotation index | label | track-to-bone index (side-by-side only):");
+            for (int i = 0; i < labels.Count; i++)
+                lines.Add("    Annotation " + i.ToString("D3") +
+                    " | " + labels[i] + " | binding bone=" +
+                    result.motion.trackToBone[i]);
+
+            // hkaSplineCompressedAnimation single-block arrays at offsets
+            // +0x44, +0x50, +0x5C, +0x68, +0x74 (32-bit hkArray pointers)
+            // followed respectively by size/capacity words at +4/+8.
+            // Without valid pointer relocations, only a byte-exact packed
+            // interval fitting all arrays is accepted; no keyframe decode.
+            int[] offsets = { 0x44, 0x50, 0x5C, 0x68, 0x74 };
+            string[] names = { "blockOffsets", "floatBlockOffsets",
+                "transformOffsets", "floatOffsets", "data" };
+            int[] counts = new int[offsets.Length];
+            if (anim.offset + 0x80 > sec.local)
+                throw new InvalidDataException("Truncated spline array descriptors");
+            for (int i = 0; i < offsets.Length; i++)
+            {
+                int at = anim.absolute + offsets[i];
+                int n = CheckedInt(U32(data, at + 4, result.bigEndian),
+                    1 << 20, names[i] + " count");
+                uint capacity = U32(data, at + 8, result.bigEndian);
+                if ((capacity & 0x3fffffffu) < (uint)n)
+                {
+                    lines.Add("  " + names[i] +
+                        " capacity smaller than count; packed layout unverified.");
+                    return false;
+                }
+                counts[i] = n;
+            }
+            if (counts[0] != result.motion.blockCount ||
+                counts[1] != result.motion.blockCount ||
+                counts[2] != 0 || counts[3] != 0 ||
+                counts[4] < result.motion.maskAndQuantizationBytes ||
+                counts[4] > 32768)
+            {
+                lines.Add("  Packed array counts do not match known single-block " +
+                    "layout; blob is not extracted.");
+                return false;
+            }
+            if (regionStart < 0 || regionStart >= typedEnd ||
+                regionStart % 16 != 0 || typedEnd > sec.local)
+                return false;
+            long blocksAt = regionStart;
+            long floatsAt = Align16Long(blocksAt + (long)counts[0] * 4);
+            long dataAt = Align16Long(floatsAt + (long)counts[1] * 4);
+            if (dataAt + counts[4] != typedEnd)
+            {
+                lines.Add("  Packed array footprint differs from typed-object " +
+                    "boundary; no compressed payload claimed.");
+                return false;
+            }
+            int firstBlockOffset = (int)U32(data, sec.start + (int)blocksAt,
+                result.bigEndian);
+            int floatBlockOffset = (int)U32(data, sec.start + (int)floatsAt,
+                result.bigEndian);
+            if (firstBlockOffset != 0 ||
+                floatBlockOffset < result.motion.maskAndQuantizationBytes ||
+                floatBlockOffset > counts[4])
+            {
+                lines.Add("  Packed block offsets not credible; source data not classified.");
+                return false;
+            }
+            lines.Add("  Verified packed-layout candidate (array counts, alignment, " +
+                "bounds, and first offsets all agree):");
+            for (int i = 0; i < offsets.Length; i++)
+                lines.Add("    m_" + names[i] + " count=" + counts[i]);
+            lines.Add("    m_blockOffsets[0]=0 | m_floatBlockOffsets[0]=" +
+                floatBlockOffset);
+            lines.Add("    blockOffsets rel=0x" + blocksAt.ToString("X") +
+                " | floatBlockOffsets rel=0x" + floatsAt.ToString("X"));
+            lines.Add("    m_data rel=[0x" + dataAt.ToString("X") +
+                "..0x" + typedEnd.ToString("X") + ") | bytes=" +
+                counts[4] + " | mask/quantization bytes=" +
+                result.motion.maskAndQuantizationBytes);
+            lines.Add("    This is COMPRESSED SOURCE DATA, not decoded spline keys.");
+            int rawAt = sec.start + (int)dataAt;
+            byte[] payload = new byte[counts[4]];
+            Buffer.BlockCopy(data, rawAt, payload, 0, payload.Length);
+            lines.Add("    First 64 payload bytes: " +
+                HexBytes(payload, 0, Math.Min(64, payload.Length)));
+            if (payload.Length > 64)
+                lines.Add("    Last 64 payload bytes: " +
+                    HexBytes(payload, payload.Length - 64, 64));
+
+            // A small source stream may be reconstructed from a text audit,
+            // preserving the exact input bytes for offline analysis. Larger
+            // streams require original HKT upload instead of gigantic logs.
+            if (payload.Length <= 8192)
+            {
+                lines.Add("    BASE64 m_data " + payload.Length +
+                    " bytes (raw, no transformations):");
+                string base64 = Convert.ToBase64String(payload);
+                for (int offset = 0; offset < base64.Length; offset += 96)
+                    lines.Add("    " + base64.Substring(offset,
+                        Math.Min(96, base64.Length - offset)));
+                lines.Add("    END BASE64 m_data");
+            }
+            else
+                lines.Add("    m_data >8KiB: full bytes omitted; upload original HKT.");
+            return true;
+        }
+
+        private static long Align16Long(long n)
+        {
+            return checked((n + 15) / 16 * 16);
+        }
+
+        private static bool TryReadAnnotationName(byte[] data, Section sec,
+            int relative, int maxBytes, out string name)
+        {
+            name = null;
+            if (relative < 0 || relative >= sec.local ||
+                maxBytes < 1 || (long)relative + maxBytes > sec.local)
+                return false;
+            int at = sec.start + relative;
+            int end = at;
+            while (end < at + maxBytes && data[end] != 0)
+            {
+                if (data[end] < 0x20 || data[end] > 0x7e) return false;
+                end++;
+            }
+            if (end <= at || end >= at + maxBytes) return false;
+            for (int k = end; k < at + maxBytes; k++)
+                if (data[k] != 0) return false;
+            name = Encoding.ASCII.GetString(data, at, end - at);
+            return true;
         }
 
         private static string PreviewSection(byte[] data, Section section,
