@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.0 - 2026-11-04 (native HKT spline AnimationClip exporter)
+- Independently reconstruct the original Wii U idle motion compressed `m_data` (2416 bytes; SHA-256 `720c4647a07950042e2cab571614603540d2c01053be713d57319e959635bd30`) from the user's uploaded Phase 2E report. Confirm exact end-to-end parsing of 103 transform tracks and repeated idle pose samples, with 13 dynamic quaternion tracks and one dynamic translation track.
+- Implement a bounded decoder for single-block Havok 2013 native 32-bit spline-compressed animation: 4-byte track masks, static or dynamic quantized translation/scale, little-endian spline knots, 40-bit compressed quaternion reconstruction and de Boor interpolation.
+- Add explicit Unity Editor `Convert Selected HKT to Unity AnimationClip` command. Select the matching imported Skell CAMDO with sibling `*_rig.hkt`, verify exact track-to-bone index/name matches and prefab hierarchy, then create **a NEW** generic `.anim` with sampled Transform position, quaternion rotation and scale curves.
+- Honor the CAMDO importer's `flipX` and `modelScale`, maintain quaternion sign continuity, refuse to overwrite an existing asset or alter the Skell model, rig, HKT or material files.
+- Add new Editor script metas, exporter button under the CAMDO Animation tab, package build mappings, and synthetic 40-bit quaternion/de Boor, exporter contract tests.
+- Limits: multi-block animations, other quaternion quantization modes, separate root-motion extraction, generic-to-Humanoid retargeting and actual Unity Editor compilation/Animator playback need follow-up verification.
+
+
 ## 0.11.5 - 2026-11-04 (HKT Phase 2E source annotation and packed-data audit)
 - Correct Phase 2D interpretation: the 103 consecutive 16-byte pointer targets contain printable `hkaAnnotationTrack` name strings (e.g. `dl099100_Bone`, `EX_UVA`), **not** compressed keyframe records.
 - Verify 103 bounded ASCII name entries against the animation annotation array pointer/count/capacity, list their names beside the existing track-to-bone index mapping as an explicitly unverified positional association.

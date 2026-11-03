@@ -70,6 +70,8 @@ namespace MusafirEx.XBX2Unity.Editor
             internal float blockDurationSeconds;
             internal float inverseBlockDuration;
             internal int[] trackToBone;
+            internal string[] annotationNames;
+            internal byte[] packedSplineData;
             internal int referenceFrameSamples;
             internal bool referenceFrameSamples16Bytes;
         }
@@ -323,6 +325,21 @@ namespace MusafirEx.XBX2Unity.Editor
                     sb.AppendLine("  WARNING: " + warning);
             }
             return sb.ToString();
+        }
+
+        // Extract only verified spline source for the native motion decoder.
+        // This never modifies the input file and never assumes the HKT rig.
+        internal static MotionProbe ExtractNativeSpline(string path)
+        {
+            Result result = Read(path, true);
+            if (!result.Valid || result.motion == null ||
+                result.motion.packedSplineData == null ||
+                result.motion.annotationNames == null ||
+                result.motion.annotationNames.Length != result.motion.trackCount)
+                throw new InvalidDataException(
+                    "No verified native spline payload / annotation binding in " +
+                    Path.GetFileName(path) + "; rerun Phase 2E audit.");
+            return result.motion;
         }
 
         internal static Result Read(string path, bool verboseSplineProbe = false)
@@ -948,6 +965,8 @@ namespace MusafirEx.XBX2Unity.Editor
             int rawAt = sec.start + (int)dataAt;
             byte[] payload = new byte[counts[4]];
             Buffer.BlockCopy(data, rawAt, payload, 0, payload.Length);
+            result.motion.annotationNames = labels.ToArray();
+            result.motion.packedSplineData = payload;
             using (SHA256 sha = SHA256.Create())
                 lines.Add("    m_data SHA256: " +
                     BitConverter.ToString(sha.ComputeHash(payload))

@@ -44,6 +44,23 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell Animation Phase 2F — real native Skell .anim exporter (v0.12.0)
+
+The user's latest Phase 2E report of real `0000_000000_idle_anm.hkt` includes the exact 2,416-byte `m_data` compressed payload in Base64 with SHA-256 `720c4647a07950042e2cab571614603540d2c01053be713d57319e959635bd30`. We **independently reconstructed** that payload from the report, read all 103 Havok transform-track masks and every scalar/rotation stream, and consumed **exactly 2,416 of 2,416 source bytes**, including alignment padding. There are 13 dynamic quaternion tracks, one dynamic translation track, the remainder static/identity; scale masks are all identity. Native spline payloads are **little-endian**, even though the outer Wii U Havok packfile is **big-endian**. The 40-bit 3-component quaternion unpacker and cubic B-spline evaluation yielded plausible, normalized poses at frames 0/50/100/150/200, and loop endpoints matched on this real idle source.
+
+**New menu:** `Tools > XBX2Unity > Animation > Convert Selected HKT to Unity AnimationClip` (also available as **Convert Selected HKT to Native Unity AnimationClip** in the CAMDO importer Animation tab).
+
+To create a real Unity animation:
+1. Update XBX2Unity to **v0.12.0**, select the extracted motion `*.hkt` in Unity's Project window and invoke the menu. The tool can also prompt for an HKT if none is selected.
+2. Select the matching **Skell `*.camdo`** inside your project's Assets folder when prompted. This CAMDO must have a sibling `*_rig.hkt` and **Import Skell HKT Hierarchy** turned on. Reimport it if the `Skell_Rig` hierarchy has not yet been created.
+3. The exporter confirms **every** HKT `hkaAnimationBinding` bone index corresponds to the **same named bone at the same index in the target rig** and that the corresponding `Skell_Rig/<bone hierarchy>` Transform exists in the imported CAMDO. A mismatch aborts without writing.
+4. Pick a **new** `.anim` destination. The exporter creates genuine Unity Transform curves for **localPosition (XYZ), localRotation (XYZW), localScale (XYZ)**, sampled from real spline curves at the source frame rate. It applies the CAMDO importer's `flipX` and `modelScale` settings, and enforces quaternion sign continuity.
+5. Attach the resulting `AnimationClip` to an Animator Controller on the imported Skell to preview it. Enable **Import Skell Bone Weights** in CAMDO Rig settings if you need actual mesh skinning rather than the bone hierarchy alone.
+
+**Currently verified supported subset:** native 32-bit Havok 2013 with one `hkaSplineCompressedAnimation` block, zero floating tracks, scalar quantization 8/16-bit, and **THREECOMP40** (5-byte) quaternion encoding. Other quaternion codecs, multi-block motion, unsupported array layouts and incompatible rig names are rejected rather than simulated. The current v0.12.0 exporter **does not** separately extract root motion, convert generic motion to Humanoid animation, adjust IK/retargeting, or overwrite existing `.anim` files. Rotation interpolation uses normalized de Boor quaternion control-point evaluation at exact source frame times, then piecewise linear Unity curves between samples.
+
+**Validation:** source-stream decompression was tested locally against the uploaded real Base64 payload, but GitHub CI only checks synthetic fixture regression and package creation. The Unity Editor bridge was disconnected during development, so v0.12.0 still requires an actual Unity compilation and Animator playback test on the target CAMDO. If errors occur, share the Unity Console and export dialog output. The original `.hkt`, `.camdo`, `*_rig.hkt`, mesh and `.mat` are not rewritten.
+
 ## Skell Animation Phase 2E — annotation-name table and packed spline bytes (v0.11.5)
 
 The real Phase 2D report from `0000_000000_idle_anm.hkt` confirms that the observed **103 × 16-byte pointer run is an array of printable bone-like annotation names**, **not** an array of compressed spline samples. Examples: annotation 0 `dl099100_Bone`, 1 `EX_UVA`, 51 `JU_backE_L`, 101 `EX_amorE_R`, 102 `EX_amorF_R`. The 103-entry `hkaAnimationBinding` track-to-bone map remains a separate, already verified index array; matching the labels and bone indices by position is a useful hypothesis but not proof of binding to the imported `*_rig.hkt`.
