@@ -216,12 +216,36 @@ namespace MusafirEx.XBX2Unity.Editor
                 bool hkt = true;
                 for (int i = 0; i < HktMagic.Length; i++)
                     if (bytes[start+i] != HktMagic[i]) { hkt = false; break; }
-                if (hkt) return "Wii U Havok HKT packfile (motion decoding pending)";
+                if (hkt) return HavokTypes(bytes, start, length);
             }
             if (length >= 4 && bytes[start] == (byte)'B' &&
                 bytes[start+1] == (byte)'C' && bytes[start+2] == 0 && bytes[start+3] == 0)
                 return "BC animation/skeleton container (not HKT)";
             return "Unknown raw data; header " + HexHeader(bytes, start, Math.Min(8, length));
+        }
+
+        private static string HavokTypes(byte[] data, int offset, int length)
+        {
+            // Havok packfile class names are plain ASCII; inspect conservatively
+            // for codec names without assuming their keyframe layout.
+            int bytes = Math.Min(length, 65536);
+            string segment = Encoding.ASCII.GetString(data, offset, bytes);
+            string[] known =
+            {
+                "hkaSplineCompressedAnimation",
+                "hkaDeltaCompressedAnimation",
+                "hkaInterleavedUncompressedAnimation",
+                "hkaWaveletCompressedAnimation",
+                "hkaAnimationBinding",
+                "hkaAnimationContainer",
+                "hkaSkeleton"
+            };
+            var found = new List<string>();
+            foreach (string type in known)
+                if (segment.IndexOf(type, StringComparison.Ordinal) >= 0)
+                    found.Add(type);
+            return found.Count == 0 ? "Havok HKT packfile (codec unknown)" :
+                "Havok HKT; class hints: " + string.Join(", ", found.ToArray());
         }
 
         internal static int Extract(Archive archive, string destination)
