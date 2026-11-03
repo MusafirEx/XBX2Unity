@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.4 - 2026-11-04 (HKT Phase 2D raw stream reconnaissance)
+- Confirm from the user's full `0000_000000_idle_anm.hkt` audit that its **103 track-to-bone entries are a unique permutation of 0–102**; binding and frame timing remain verified.
+- Add a **read-only** diagnostic for individual HKT files: raw spline header prefix, consecutive 16-byte local pointer-run analysis and samples, bounded unclassified interval previews, and first/last root-reference-frame sample previews.
+- Explicitly label byte/float previews as uninterpreted; do not claim knowledge of compressed B-spline data layout or root-motion values from a text report.
+- No AnimationClip or keyframes created, no original game files modified.
+
+
 ## 0.11.3 - 2026-11-04 (HKT spline timing and binding metadata)
 - From the user's real `0000_000000_idle_anm.hkt` Phase 2B audit, identify the Havok 2013 Wii U/32-bit spline metadata: 6.6667s, 201 frames at ~30 FPS, 103 transform tracks, zero float tracks and one compressed block. These are **header fields**, not decoded keyframes.
 - Validate `hkaAnimationBinding` fixups to its animation object, original skeleton name `dl099100_Bone` and 103-element int16 track-to-bone mapping. The first track indices are 0, 62, 63, 1, 64, 65, 66, 2. Export the complete mapping to the report when one HKT is selected.
