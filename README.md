@@ -44,6 +44,18 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell Animation Phase 2A - native Wii U Havok HKT packfile audit (v0.11.0)
+
+The original `hkc.cpk` Skell archives contain real animation files; on `dl099100.sar`, the user confirmed extraction of **444** indexed `*_anm.hkt` files into `Assets/XBX/ANimation`. Unity still sees these as `DefaultAsset`, **not** `AnimationClip`.
+
+To inspect the extracted HKT packfiles safely:
+
+1. In Unity Project, select `Assets/XBX/ANimation` (all files), or one `*.hkt`.
+2. Open **Tools > XBX2Unity > Animation > Audit Extracted HKT Packfiles**, or right-click the selection and choose **Assets > XBX2Unity > Audit Havok HKT Motion**. The CAMDO **Animation** inspector also offers **Audit Extracted Animation HKT Packfiles**; if no HKT is selected, it asks for one file.
+3. Read `XBX_Exports/AnimationAudits/ANimation_hkt_motion_audit.txt`. The report includes packfile version, endianness, section count, pointer width, root class when resolvable, local/global/virtual fixup counts, and typed object references such as `hkaSplineCompressedAnimation`, `hkaAnimationBinding` and `hkaAnimationContainer`. Unsupported/truncated packfiles have per-file error records.
+
+The auditor uses Havok 2013 packfile header and section metadata, not pattern-only class hints. It is intentionally **read-only**, has file/batch limits and safe offset checks, and does not require the selected directory to be committed to GitHub. It **does not** parse spline keys, duration, frame rate, binding track indexes, retargeting or root motion, and it creates **no** placeholder Unity animation clips. Next, inspect the real `0000_000000_idle_anm.hkt` and the corresponding `*_rig.hkt` binary payloads to implement full motion decoding. Synthetic CI fixture tests do not replace validation using real game HKT files.
+
 ## Skell Animation Phase 1 - Wii U hkc SAR sources (v0.10.1)
 
 For the **original Wii U Xenoblade Chronicles X**, Skell combat animations are typically stored under `hkc.cpk/dl/` as per-Skell `*.sar` archives (e.g. `dl019600.sar`); their entries include Havok `*.hkt` motions (idle, run, jump, arts). The `*_rig.hkt` beside a `*.camdo` is a separate **skeleton** and must not be imported as if it were an animation.
