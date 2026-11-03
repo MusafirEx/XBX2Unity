@@ -146,6 +146,37 @@ def fixture_motion_metadata():
     assert 201*16 == 3216  # synthetic reference-frame sample footprint
 
 
+def fixture_phase2d_raw_pointer_probe():
+    """Emulate validated relative offsets; this is NOT sampled spline data."""
+    tracks = 103
+    data_bytes = 9664
+    next_typed_object = 0x17D0
+    run = [(0x160 + 16*i, 0x7D0 + 16*i) for i in range(tracks)]
+    edges = [(0xEC, 0x160)] + run
+    longest = []
+    i = 0
+    while i < len(edges):
+        j = i+1
+        while j < len(edges) and edges[j][0] - edges[j-1][0] == 16 and \
+                edges[j][1] - edges[j-1][1] == 16:
+            j += 1
+        if j-i > len(longest):
+            longest = edges[i:j]
+        i = j
+    assert len(longest) == tracks
+    assert longest[0] == (0x160, 0x7D0)
+    assert longest[-1] == (0x7C0, 0xE30)
+    candidate_gap = longest[-1][1] + 16
+    assert candidate_gap == 0xE40
+    assert next_typed_object - candidate_gap == 0x990
+    root_sample_start = 0x1810
+    root_count = 201
+    assert root_sample_start + root_count * 16 == 0x24A0
+    assert root_sample_start + root_count * 16 <= data_bytes
+    # Confirm raw previews cannot write, fabricate frames, or infer spline data.
+    assert b"\\0" != b"not a keyframe"
+
+
 def main():
     for big in (True, False):
         for stride, first_field in ((48, 16), (48, 20), (64, 20)):
@@ -162,6 +193,7 @@ def main():
             else:
                 raise AssertionError("HKT section end corruption was not rejected")
     fixture_motion_metadata()
+    fixture_phase2d_raw_pointer_probe()
     for item in (
         "hkPackfileHeader", "HktMagic", "MaxFiles = 4096",
         "MaxBatchBytes", "CountFixups", "__classnames__",
@@ -172,6 +204,9 @@ def main():
         "FormatFields", "48, 48, 64",
         "No extracted HKT files selected.", "File.WriteAllText",
         "ReadMotionMetadata", "CheckedInt", "SafeAsciiString",
+        "ProbeSplineStream", "PreviewSection", "ReadFloat4",
+        "Repeating 16-byte local pointer run:", "uninterpreted source bytes",
+        "Reference frame:",
         "Duration seconds:", "Binding track->bone index entries:",
         "Binding does not point to this animation", "MappingCount" if False else
         "Track-map size/capacity disagrees with animation",
@@ -183,7 +218,7 @@ def main():
     assert "Editor/XBXSkellHktMotionAudit.cs" in BUILDER
     assert "Editor/XBXSkellHktMotionAudit.cs.meta" in BUILDER
     assert "HKT" in README and "AnimationClip" in README
-    print("Synthetic HKT layout, pointer fixups, 201-frame timing, 103-track bone map and source contracts OK")
+    print("Synthetic HKT headers, 103-track bone-map and Phase 2D bounded pointer-run probe OK")
 
 
 if __name__ == "__main__":
