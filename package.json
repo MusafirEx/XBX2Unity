@@ -1,8 +1,8 @@
 {
   "name": "com.musafirex.xbx2unity",
-  "version": "0.9.4",
+  "version": "0.10.0",
   "displayName": "XBX2Unity - Xenoblade X Wii U Native CAMDO Tools",
-  "description": "XBX2Unity native Skell MXMD/GX2 importer, HKT rig and source-linked material editing, G-body and B-glow layer preview from game observation.",
+  "description": "XBX2Unity native Skell MXMD/GX2 importer, HKT rig and source-linked materials, and Wii U SAR animation source audit/extraction (motion decoding pending).",
   "unity": "2022.3",
   "keywords": [
     "xenoblade",
@@ -20,6 +20,8 @@
     "mxmd",
     "scriptedimporter",
     "map",
+    "animation-audit",
+    "sar1",
     "texture-binding",
     "vertex-blend",
     "terrain"
