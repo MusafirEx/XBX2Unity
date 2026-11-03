@@ -53,7 +53,7 @@ def main():
 
     assert "public bool skellUseRgbCompanionAsPaintMask = false;" in IMPORTER
     assert "public float skellPaintStrength = 0f;" in IMPORTER
-    assert '[ScriptedImporter(14, "camdo")]' in IMPORTER
+    assert '[ScriptedImporter(15, "camdo")]' in IMPORTER
     assert "XBXSkellPaintChannelAudit.ProfileBc1(raw,width,height)" in DECODER
     assert DECODER.index("ProfileBc1(raw,width,height)") < DECODER.index(
         "tex.Apply(false, true);")
@@ -63,7 +63,7 @@ def main():
     assert "File.WriteAllText(destination, lines.ToString())" in MATUI
     assert "skellMaskChannel" in INSPECTOR and "_MaskChannel" in SHADER
     assert "if (hasCandidate)" in IMPORTER
-    assert 'mat.SetTexture("_PaintMask", rgbCandidate.texture.texture);' in IMPORTER
+    assert 'rgbCandidate.texture.linearMaskTexture ??' in IMPORTER
     assert "skellUseRgbCompanionAsPaintMask ? 1f : 0f" in IMPORTER
     assert "float line =" not in SHADER  # avoid previous HLSL syntax regression
     assert "_ViewMode > 9.5" in SHADER

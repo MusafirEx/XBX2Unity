@@ -48,7 +48,7 @@ def main():
         "if (_ViewMode > 10.5 && _ViewMode < 11.5)",
         "if (_ViewMode > 11.5 && _ViewMode < 12.5)")
     includes(imp,
-        '[ScriptedImporter(14, "camdo")]',
+        '[ScriptedImporter(15, "camdo")]',
         "public bool skellUseObservedGreenBody = false;",
         "public bool skellUseObservedBlueGlow = false;",
         'mat.SetFloat("_UseObservedGreenBody"',

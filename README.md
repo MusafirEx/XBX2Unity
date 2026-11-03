@@ -44,7 +44,7 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
-## Verified-in-game Skell companion roles for dl099110 (v0.9.3)
+## Verified-in-game Skell companion roles for dl099110 (v0.9.3; linear-mask update v0.9.4)
 
 Direct visual comparison with the original game on `dl099110` established:
 - **Green (G)** channel of source `*_RGB` = Skell **body part** mask.

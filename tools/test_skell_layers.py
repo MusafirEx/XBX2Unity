@@ -20,7 +20,7 @@ def contains(src, *needles):
         assert n in src, f"Missing source contract: {n}"
 
 contains(imp,
-    '[ScriptedImporter(14, "camdo")]',
+    '[ScriptedImporter(15, "camdo")]',
     "public bool importSkellNormalMaps = false;",
     "public bool importSkellSpecularMaps = false;",
     "public bool skellLayerPreviewShader = false;",
@@ -29,7 +29,7 @@ contains(imp,
     "XBXSkellMaterialLayers.AssignNormal(mat, normalCandidate)",
     "XBXSkellMaterialLayers.AssignSpecular(mat, specCandidate)",
     "XBXSkellMaterialLayers.Role.RgbCompanion",
-    'mat.SetTexture("_PaintMask", rgbCandidate.texture.texture);',
+    'rgbCandidate.texture.linearMaskTexture ??',
     'ctx.AddObjectToAsset("xbx_material_manifest", manifest);',
     "renderer.sharedMaterial = overrideMaterial;",
     "XBXSkellSkinning.TryBuild",

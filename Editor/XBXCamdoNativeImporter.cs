@@ -16,7 +16,7 @@ using UnityEngine.Rendering;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
-    [ScriptedImporter(14, "camdo")]
+    [ScriptedImporter(15, "camdo")]
     public sealed class XBXCamdoNativeImporter : ScriptedImporter
     {
         [Header("Model")]
@@ -167,8 +167,14 @@ namespace MusafirEx.XBX2Unity.Editor
                         skellMtxt = XBXSkellMtxt.Decode(bytes, companion,
                             maxSkellTextures, out mtxtMessage);
                         foreach (var pair in skellMtxt)
+                        {
                             ctx.AddObjectToAsset("mtxt_" + pair.Key.ToString("D4"),
                                 pair.Value.texture);
+                            // Separate linear subasset preserves color-space intent.
+                            if (pair.Value.linearMaskTexture != null)
+                                ctx.AddObjectToAsset("mtxt_mask_linear_" + pair.Key.ToString("D4"),
+                                    pair.Value.linearMaskTexture);
+                        }
                         ctx.LogImportWarning("Skell " + mtxtMessage +
                             ". Source shader roles and color/normal assignments are provisional.");
                     }
@@ -530,7 +536,9 @@ namespace MusafirEx.XBX2Unity.Editor
                                             mat.HasProperty("_PaintMask");
                                         if (hasCandidate)
                                         {
-                                            mat.SetTexture("_PaintMask", rgbCandidate.texture.texture);
+                                            mat.SetTexture("_PaintMask",
+                                                rgbCandidate.texture.linearMaskTexture ??
+                                                rgbCandidate.texture.texture);
                                             skellPaintCandidateBound++;
                                         }
                                         if (mat.HasProperty("_UsePaintMask"))

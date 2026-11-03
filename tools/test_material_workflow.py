@@ -19,7 +19,7 @@ def check(src, *tokens):
         assert token in src, f"Missing required material contract: {token}"
 
 check(IMPORTER,
-    "[ScriptedImporter(14, \"camdo\")]",
+    "[ScriptedImporter(15, \"camdo\")]",
     "public Shader generatedMaterialShaderOverride;",
     "public List<XBXMaterialOverride> materialOverrides",
     "ScriptableObject.CreateInstance<XBXMaterialManifest>()",
