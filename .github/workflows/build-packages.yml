@@ -35,6 +35,8 @@ jobs:
         run: python tools/test_skell_linear_masks.py
       - name: Validate Wii U Skell SAR animation source reader
         run: python tools/test_skell_sar_sources.py
+      - name: Validate Havok 2013 HKT metadata scanner
+        run: python tools/test_hkt_packfile_metadata.py
       - name: Build UPM ZIP and unitypackage
         run: python tools/build_unitypackage.py
       - name: Upload packages
