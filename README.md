@@ -44,6 +44,19 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell Animation Phase 2D — source-byte probe for spline data (v0.11.4)
+
+The real `0000_000000_idle_anm.hkt` audit confirms **201 frames at ~30 FPS**, **103 transform tracks**, and an exact, non-duplicated permutation of **bone indices 0–102**. The original binding names `dl099100_Bone`; compressed keyframes have **not** been decoded.
+
+Version 0.11.4 extends **Tools > XBX2Unity > Animation > Audit Extracted HKT Packfiles** when a single HKT is selected:
+
+- Print a bounded **160-byte prefix** of the actual `hkaSplineCompressedAnimation` object, without assigning undocumented meanings to fields.
+- Identify the longest consecutive run of Havok local fixup pointers with **16-byte source and target strides** within the spline object's typed-object span. Show source/target offsets, whether its count equals the verified transform track count, and selected 16-byte target previews. The correlation **does not prove** that these are spline sample records.
+- Print first/last 32 raw bytes of an unclassified interval after the pointer-run targets, if one exists. **Do not label the interval as compressed data until validated.**
+- For bounded `hkaDefaultAnimatedReferenceFrame` samples, display the first two and final two **16-byte records**, plus an optional four-float interpretation labeled *unverified semantics*. This is not decoded root translation or quaternion output.
+
+The report continues to be written outside Assets under `XBX_Exports/AnimationAudits`; existing `.hkt`, `.mat`, rigs and meshes are unchanged. **CI tests synthetic pointer layouts, not actual Havok motion playback.** To proceed toward a keyframe decoder, run the audit on `0000_000000_idle_anm.hkt` again and share the new Phase 2D report. For definitive compression analysis, the original HKT binary is more informative than a text-only report.
+
 ## Skell Animation Phase 2C — spline timing and track-to-bone metadata (v0.11.3)
 
 A user-supplied **real audit** of `0000_000000_idle_anm.hkt` (Havok 2013, Wii U BE, pointer size 4) exposed typed object header bytes and resolved pointers. The inferred Havok 2013 32-bit metadata agrees internally:
