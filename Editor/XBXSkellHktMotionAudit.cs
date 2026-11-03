@@ -240,35 +240,18 @@ namespace MusafirEx.XBX2Unity.Editor
             if (rootSection >= numberSections)
                 throw new InvalidDataException("Root section outside directory");
 
-            var sections = new Section[(int)numberSections];
-            for (int i = 0; i < sections.Length; i++)
-            {
-                int at = 0x40 + i * 48;
-                string name = Ascii(data, at, 16);
-                int start = CheckedOffset(U32(data, at + 16, bigEndian),
-                    data.Length, "section data start");
-                int local = CheckedOffset(U32(data, at + 20, bigEndian),
-                    data.Length, "local fixup offset");
-                int global = CheckedOffset(U32(data, at + 24, bigEndian),
-                    data.Length, "global fixup offset");
-                int virtuals = CheckedOffset(U32(data, at + 28, bigEndian),
-                    data.Length, "virtual fixup offset");
-                int exports = CheckedOffset(U32(data, at + 32, bigEndian),
-                    data.Length, "exports offset");
-                int imports = CheckedOffset(U32(data, at + 36, bigEndian),
-                    data.Length, "imports offset");
-                int end = CheckedOffset(U32(data, at + 40, bigEndian),
-                    data.Length, "section end offset");
-                if (local > global || global > virtuals || virtuals > exports ||
-                    exports > imports || imports > end ||
-                    (long)start + end > data.Length)
-                    throw new InvalidDataException("Bad section bounds: " + name);
-                sections[i] = new Section
-                {
-                    name = name, start = start, local = local, global = global,
-                    virtuals = virtuals, exports = exports, imports = imports, end = end
-                };
-            }
+            // Havok packfiles have several section-header layouts. The Wii U
+            // rig reader treats a section as 16-byte tag + eight uint32 words;
+            // other Havok variants use 20-byte tag + seven uint32 words.
+            // Choose a layout only if ALL section names and bounds validate.
+            // Never silently skip a broken __types__ section.
+            int headerStride;
+            int fieldsOffset;
+            var sections = ReadSections(data, bigEndian, (int)numberSections,
+                out headerStride, out fieldsOffset);
+            result.warnings.Add("Verified section headers: stride=" +
+                headerStride + " bytes, first offset=+0x" +
+                fieldsOffset.ToString("X") + ".");
             if (!sections.Any(x => x.name == "__classnames__"))
                 result.warnings.Add("No __classnames__ section; virtual object names may be unresolved.");
             if (!sections.Any(x => x.name == "__data__"))
@@ -330,6 +313,88 @@ namespace MusafirEx.XBX2Unity.Editor
                 result.warnings.Add("No supported animation class reference found; " +
                     "inspect HKT section layout manually.");
             return result;
+        }
+
+        // Three layouts supported for header metadata audits:
+        // 48/16: 16-byte tag + 8 32-bit words (xc3_lib HKT reader);
+        // 48/20: 20-byte tag + 7 32-bit words (standard 32-bit HKX);
+        // 64/20: same fields plus extra header tail (later Havok builds).
+        // Candidates are checked against section names, relative ordering
+        // and the physical source file length before any pointer access.
+        private static Section[] ReadSections(byte[] data, bool bigEndian, int count,
+            out int stride, out int fieldsOffset)
+        {
+            var strides = new[] { 48, 48, 64 };
+            var fieldStarts = new[] { 16, 20, 20 };
+            var failures = new List<string>();
+            for (int layout = 0; layout < strides.Length; layout++)
+            {
+                int width = strides[layout];
+                int first = fieldStarts[layout];
+                try
+                {
+                    if (0x40L + (long)count * width > data.Length)
+                        throw new InvalidDataException("section directory truncated");
+                    var parsed = new Section[count];
+                    for (int i = 0; i < count; i++)
+                    {
+                        int at = 0x40 + i * width;
+                        string name = Ascii(data, at, 16);
+                        if (i < 3 && count >= 3)
+                        {
+                            string expected = i == 0 ? "__classnames__" :
+                                i == 1 ? "__types__" : "__data__";
+                            if (name != expected)
+                                throw new InvalidDataException("expected " + expected +
+                                    " at 0x" + at.ToString("X") + ", found " + name);
+                        }
+                        int off = at + first;
+                        uint[] raw = new uint[7];
+                        for (int k = 0; k < raw.Length; k++)
+                            raw[k] = U32(data, off + 4*k, bigEndian);
+                        if (raw.Any(v => v == 0xffffffffu))
+                            throw new InvalidDataException("sentinel section field at " +
+                                name + " @0x" + at.ToString("X") + " values=" +
+                                FormatFields(raw));
+                        int dataStart = CheckedOffset(raw[0], data.Length, "section data start");
+                        int local = CheckedOffset(raw[1], data.Length, "local fixup offset");
+                        int global = CheckedOffset(raw[2], data.Length, "global fixup offset");
+                        int virt = CheckedOffset(raw[3], data.Length, "virtual fixup offset");
+                        int exports = CheckedOffset(raw[4], data.Length, "exports offset");
+                        int imports = CheckedOffset(raw[5], data.Length, "imports offset");
+                        int finish = CheckedOffset(raw[6], data.Length, "section end offset");
+                        if (local > global || global > virt || virt > exports ||
+                            exports > imports || imports > finish ||
+                            (long)dataStart + finish > data.Length)
+                            throw new InvalidDataException("bad section bounds: " + name +
+                                " @0x" + at.ToString("X") + " words=" + FormatFields(raw));
+                        parsed[i] = new Section
+                        {
+                            name = name, start = dataStart, local = local,
+                            global = global, virtuals = virt, exports = exports,
+                            imports = imports, end = finish
+                        };
+                    }
+                    stride = width;
+                    fieldsOffset = first;
+                    return parsed;
+                }
+                catch (InvalidDataException ex)
+                {
+                    failures.Add(width + "B/+0x" + first.ToString("X") + ": " +
+                        ex.Message);
+                }
+            }
+            throw new InvalidDataException("No verified HKT section-header layout. " +
+                string.Join(" | ", failures.ToArray()));
+        }
+
+        private static string FormatFields(uint[] raw)
+        {
+            var fields = new string[raw.Length];
+            for (int i = 0; i < raw.Length; i++)
+                fields[i] = "0x" + raw[i].ToString("X8");
+            return string.Join(",", fields);
         }
 
         private static int CountFixups(byte[] bytes, Section sec,
