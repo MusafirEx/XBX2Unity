@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
@@ -864,6 +865,7 @@ namespace MusafirEx.XBX2Unity.Editor
                 }
                 labels.Add(label);
             }
+            lines.Add("  PHASE 2E VERIFIED ANNOTATION-NAME TABLE / PACKED SPLINE PROBE:");
             lines.Add("  Verified hkaAnnotationTrack names: " + labels.Count +
                 " (NOT spline keyframes)");
             lines.Add("  Annotation index | label | track-to-bone index (side-by-side only):");
@@ -946,6 +948,10 @@ namespace MusafirEx.XBX2Unity.Editor
             int rawAt = sec.start + (int)dataAt;
             byte[] payload = new byte[counts[4]];
             Buffer.BlockCopy(data, rawAt, payload, 0, payload.Length);
+            using (SHA256 sha = SHA256.Create())
+                lines.Add("    m_data SHA256: " +
+                    BitConverter.ToString(sha.ComputeHash(payload))
+                        .Replace("-", "").ToLowerInvariant());
             lines.Add("    First 64 payload bytes: " +
                 HexBytes(payload, 0, Math.Min(64, payload.Length)));
             if (payload.Length > 64)
