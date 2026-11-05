@@ -425,7 +425,7 @@ def fixture_native_hkt_sar_asset_import_contract():
     assert 'XBXSkellNativeMotionImporters.cs.meta' in BUILDER
     assert 'XBXSkellNativeMotionImporterInspectors.cs' in BUILDER
     assert 'XBXSkellNativeMotionImporterInspectors.cs.meta' in BUILDER
-    assert 'XBXSkellHktAssetImporter' in README
+    assert '## Native .HKT and .SAR animation import' in README
 
     # The SAR manifest should identify unsupported entries rather than silently
     # declaring 444 convertible motions; binary entries are sliced from the
