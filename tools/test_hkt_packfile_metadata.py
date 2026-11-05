@@ -510,7 +510,7 @@ def fixture_compatible_skell_animation_sharing():
         assert phrase in AUTOIMPORT, "Compatible Skell variant importer missing: " + phrase
 
     assert AUTOINSPECTOR.count('new GUIContent("Compatible Skell CAMDOs")') == 2
-    assert "compatibleSkellCamdos" in README
+    assert "Compatible Skell CAMDOs" in README
     assert "Compatible Skell" in README
     # Original stable source IDs are retained, variants derive GUIDs from
     # target CAMDOs so reorder of additional targets will not break references.
