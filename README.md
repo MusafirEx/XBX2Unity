@@ -44,6 +44,24 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell Animation v0.12.2 — diagnose no movement: Animator root, clip bindings, and mesh skinning
+
+The user's real exported `0000_000000_idle_anm_native(1).anim` and `0001_001000_park_st_anm_native.anim` contain **actual keyframe movement**. The idle clip has **13 dynamic quaternion curve groups, 1 dynamic position group**. The park/start clip has **64 dynamically varying quaternion curve groups and 2 changing position groups**. Both encode exactly 103 unique bone paths per group; the paths start with `Skell_Rig/` and are *relative to the GameObject carrying Animator*. An Animator placed on `Skell_Rig` cannot resolve those `Skell_Rig/...` paths, whereas an Animator on the **CAMDO model root** can.
+
+One unusual difference: the submitted park/start .anim has an empty serialized `m_ClipBindingConstant.genericBindings` table while idle has 309 entries. This should be investigated by Unity's own `AnimationUtility.GetCurveBindings` API and/or a forced clip reimport; copying YAML binding tables is **not** a general solution.
+
+The Skell CAMDO importer creates `<model root>/Skell_Rig/...bones` **alongside** `<model root>/model_###/draw_###`. Geometry follows bones **only** if its renderer is a `SkinnedMeshRenderer` with valid bone weights; the importer defaults `Import Skell Bone Weights` to OFF and falls back to regular `MeshRenderer` for unsupported draw buffers. In that case the skeleton may animate while the visible model stays static.
+
+**New diagnostic**: `Tools > XBX2Unity > Animation > Diagnose Skell Clip / Hierarchy` (also in CAMDO Inspector's Animation tab):
+
+1. Drag the imported CAMDO **model root** GameObject or an instance in the scene into *Imported CAMDO Root*.
+2. Drag the exported `.anim` into *Exported .anim Clip*. Click **Analyze paths, Animator and renderers**. Copy the logged diagnostic results, including matched/missing binding paths, Animator root/controller and mesh renderer skin/weight counts.
+3. If Unity reports **zero registered curve bindings**, click **Refresh clip import**, re-analyze, and try exporting a NEW clip from the source `.hkt`.
+4. Instantiate the CAMDO in the scene, put **Animator on the model root** (not under Skell_Rig), assign an Animator Controller with the chosen clip as its state, and click **Preview bone pose at 50%**. Click **Stop temporary preview** afterward. This preview is transient and does not overwrite prefabs.
+5. If bones move but mesh does not, enable *Import Skell HKT Hierarchy* and *Import Skell Bone Weights* in the CAMDO Rig tab; reimport. Check whether the affected draw actually has `SkinnedMeshRenderer` rather than `MeshRenderer`. Not all MXMD buffers can be skinned; unsupported buffers remain static with importer warnings.
+
+v0.12.2 also warns during new .anim export if the chosen CAMDO has **zero** SkinnedMeshRenderer components, forcibly reimports the newly written `.anim` to refresh Unity's binding metadata and reports if registered bindings remain empty. It **does not** relocate existing Animator components, alter animation curve values, mutate Skell models/materials, or overwrite prior exported clips. Native Unity Editor/Animator validation is still required.
+
 ## Skell Animation v0.12.1 — compact real curves, automatic loop for seamless idle
 
 Independent analysis of the user's real generated `0000_000000_idle_anm_native.anim` alongside the binary `0000_000000_idle_anm.hkt`, `dl099100.sar` and `dl099100.camdo` confirms:
