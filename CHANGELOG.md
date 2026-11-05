@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.2 - 2026-11-05 (Skell clip root / renderer binding diagnostic)
+- Investigate reported **no visible animation** despite exported native Skell `.anim`. The user-supplied idle clip contains 13 varying rotation groups and one varying position group; `park_st` contains 64 varying rotation groups and two varying position groups, so the sampled clips are **not empty**.
+- Both clips encode 103 × 3 identical `Skell_Rig/<bone hierarchy>` paths. These paths **require the Animator to be on the CAMDO model root**, one parent ABOVE `Skell_Rig`, not on the rig or a detached model child.
+- The submitted `park_st` serialized `m_ClipBindingConstant.genericBindings: []` despite 309 grouped Transform curves; the submitted idle clip has **309** generic binding entries. This discrepancy is suspicious but not definitive proof of the playback problem.
+- Add **Tools > XBX2Unity > Animation > Diagnose Skell Clip / Hierarchy** editor window to analyze Unity-recognized curve bindings, exact paths against a selected imported CAMDO, root/nested Animator placement/controllers, and SkinnedMeshRenderer bones/weights versus static MeshRenderer fallback. Provides explicit read-only error reporting, opt-in clip reimport and temporary scene pose preview.
+- After exporting a **new** native .anim, force a clip reimport to refresh serialized bindings and log an explicit warning if Unity still reports zero curve bindings. Warn when the target CAMDO prefab has no skinned renderers.
+- Preserve actual HKT motion samples, model/rig/material source assets and existing AnimationClips. Tests are source contracts/synthetic; actual Unity editor compilation and scene playback require end-user verification.
+
+
 ## 0.12.1 - 2026-11-05 (compact Skell .anim curves + seamless idle looping)
 - Independently audit the user's real generated `0000_000000_idle_anm_native.anim` (20,683,697 bytes) against the original 11,200-byte HKT and the 444-entry `dl099100.sar`: the HKT appears byte-for-byte in the SAR, all 103 annotation names match exported clip paths, and all 309 quaternion/position/scale curves contain 201 ordered samples. The original file contains no invalid values or quaternion sign discontinuities; only 13 quaternion groups and one position group vary over time.
 - Fix exporter bloat: preserve all dynamic samples, but replace redundant static **whole-vector/quaternion groups** with two identical endpoint samples. On the submitted idle clip this reduces 62,109 serialized keyframes to 3,404 (295 static groups, 14 dynamic groups). A directly transformed YAML fixture shrank 20.68 MB to 1.59 MB (**92.33% smaller**) with all original dynamic curve values and timestamps preserved.
