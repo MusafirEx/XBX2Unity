@@ -68,6 +68,8 @@ namespace MusafirEx.XBX2Unity.Editor
                     XBXSkellHktMotionAudit.RunSelected();
                 if (GUILayout.Button("Convert Selected HKT to Native Unity AnimationClip"))
                     XBXSkellHktClipExporter.RunSelected();
+                if (GUILayout.Button("Diagnose Skell Clip / Hierarchy / Skinning"))
+                    XBXSkellAnimationBindingDiagnostics.Open();
                 EditorGUILayout.HelpBox(
                     "Phase 2F can decode verified Havok 2013 32-bit, single-block " +
                     "spline transform tracks into a genuine AnimationClip. Select one " +
