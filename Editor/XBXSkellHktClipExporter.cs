@@ -136,7 +136,7 @@ namespace MusafirEx.XBX2Unity.Editor
                 Selection.activeObject = persistedClip;
                 Debug.Log("[XBX2Unity] Native HKT spline AnimationClip saved: " +
                     targetPath + "; " + poses.trackCount + " tracks x " +
-                    poses.frameCount + " frames at " + clip.frameRate.ToString("F4") +
+                    poses.frameCount + " frames at " + persistedClip.frameRate.ToString("F4") +
                     " FPS; looped idle=" + isSeamlessIdle +
                     "; constant Transform curve groups collapsed to two endpoint keys" +
                     "; dynamic position axes=" + poses.dynamicTranslations +
