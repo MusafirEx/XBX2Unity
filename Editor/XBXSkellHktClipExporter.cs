@@ -98,6 +98,15 @@ namespace MusafirEx.XBX2Unity.Editor
                         clip.frameRate);
                 }
                 clip.EnsureQuaternionContinuity();
+                // Only automatically loop an explicit idle animation whose
+                // sampled transforms return to their initial state.
+                bool isSeamlessIdle = IsSeamlessIdle(source, poses);
+                if (isSeamlessIdle)
+                {
+                    var settings = AnimationUtility.GetAnimationClipSettings(clip);
+                    settings.loopTime = true;
+                    AnimationUtility.SetAnimationClipSettings(clip, settings);
+                }
                 AssetDatabase.CreateAsset(clip, targetPath);
                 AssetDatabase.SaveAssets();
                 EditorGUIUtility.PingObject(clip);
@@ -105,7 +114,9 @@ namespace MusafirEx.XBX2Unity.Editor
                 Debug.Log("[XBX2Unity] Native HKT spline AnimationClip saved: " +
                     targetPath + "; " + poses.trackCount + " tracks x " +
                     poses.frameCount + " frames at " + clip.frameRate.ToString("F4") +
-                    " FPS; dynamic position axes=" + poses.dynamicTranslations +
+                    " FPS; looped idle=" + isSeamlessIdle +
+                    "; constant Transform curve groups collapsed to two endpoint keys" +
+                    "; dynamic position axes=" + poses.dynamicTranslations +
                     ", dynamic rotation tracks=" + poses.dynamicRotations +
                     ", dynamic scale axes=" + poses.dynamicScales +
                     ". Parent/root motion extraction is not separately implemented.");
@@ -200,9 +211,16 @@ namespace MusafirEx.XBX2Unity.Editor
                 y[f] = frames[f].y;
                 z[f] = frames[f].z;
             }
-            clip.SetCurve(path, typeof(Transform), property + ".x", BuildCurve(x, fps));
-            clip.SetCurve(path, typeof(Transform), property + ".y", BuildCurve(y, fps));
-            clip.SetCurve(path, typeof(Transform), property + ".z", BuildCurve(z, fps));
+            // Keep both boundary samples for constant vector groups; this
+            // yields exactly the same transform over the clip duration while
+            // avoiding 201 redundant samples for every unchanged bone.
+            bool constant = Uniform(frames);
+            clip.SetCurve(path, typeof(Transform), property + ".x",
+                BuildCurve(x, fps, constant));
+            clip.SetCurve(path, typeof(Transform), property + ".y",
+                BuildCurve(y, fps, constant));
+            clip.SetCurve(path, typeof(Transform), property + ".z",
+                BuildCurve(z, fps, constant));
         }
 
         private static void SetQuaternion(AnimationClip clip,
@@ -219,14 +237,72 @@ namespace MusafirEx.XBX2Unity.Editor
                 z[f] = frames[f].z;
                 w[f] = frames[f].w;
             }
-            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.x", BuildCurve(x, fps));
-            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.y", BuildCurve(y, fps));
-            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.z", BuildCurve(z, fps));
-            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.w", BuildCurve(w, fps));
+            // Collapse the ENTIRE quaternion group together (not individual
+            // components), so Unity receives consistent quaternion timestamps.
+            bool constant = Uniform(frames);
+            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.x",
+                BuildCurve(x, fps, constant));
+            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.y",
+                BuildCurve(y, fps, constant));
+            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.z",
+                BuildCurve(z, fps, constant));
+            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.w",
+                BuildCurve(w, fps, constant));
         }
 
-        private static AnimationCurve BuildCurve(float[] values, float fps)
+        private static bool Uniform(Vector3[] values)
         {
+            for (int i = 1; i < values.Length; i++)
+                if (values[i].x != values[0].x ||
+                    values[i].y != values[0].y ||
+                    values[i].z != values[0].z)
+                    return false;
+            return true;
+        }
+
+        private static bool Uniform(Quaternion[] values)
+        {
+            for (int i = 1; i < values.Length; i++)
+                if (values[i].x != values[0].x ||
+                    values[i].y != values[0].y ||
+                    values[i].z != values[0].z ||
+                    values[i].w != values[0].w)
+                    return false;
+            return true;
+        }
+
+        private static bool IsSeamlessIdle(string source,
+            XBXSkellHktSplineDecoder.Poses poses)
+        {
+            string filename = Path.GetFileNameWithoutExtension(source);
+            if (filename.IndexOf("idle", StringComparison.OrdinalIgnoreCase) < 0)
+                return false;
+            int last = poses.frameCount - 1;
+            for (int i = 0; i < poses.trackCount; i++)
+            {
+                if ((poses.positions[i][0] - poses.positions[i][last]).sqrMagnitude >
+                    0.00000001f ||
+                    (poses.scales[i][0] - poses.scales[i][last]).sqrMagnitude >
+                    0.00000001f ||
+                    Quaternion.Angle(poses.rotations[i][0],
+                        poses.rotations[i][last]) > 0.1f)
+                    return false;
+            }
+            return true;
+        }
+
+        private static AnimationCurve BuildCurve(float[] values, float fps,
+            bool constant = false)
+        {
+            if (values == null || values.Length < 2)
+                throw new InvalidDataException("Not enough sampled HKT frames");
+            if (constant)
+            {
+                float end = (values.Length - 1) / fps;
+                return new AnimationCurve(
+                    new Keyframe(0f, values[0], 0f, 0f),
+                    new Keyframe(end, values[0], 0f, 0f));
+            }
             var keys = new Keyframe[values.Length];
             for (int i = 0; i < keys.Length; i++)
             {
