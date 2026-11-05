@@ -434,7 +434,7 @@ namespace MusafirEx.XBX2Unity.Editor
                         {
                             skipped++;
                             string reason = primaryFailure ??
-                                "No matching CAMDO/ridge hierarchy available";
+                                "No matching CAMDO/rig hierarchy available";
                             string lookupError;
                             if (sourceRigErrors.TryGetValue(family,
                                 out lookupError))
