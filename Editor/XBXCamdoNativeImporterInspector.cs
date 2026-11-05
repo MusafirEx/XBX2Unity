@@ -55,6 +55,14 @@ namespace MusafirEx.XBX2Unity.Editor
             {
                 EditorGUILayout.LabelField("Skell Motion Archive (Wii U)", EditorStyles.boldLabel);
                 EditorGUILayout.HelpBox(
+                    "v0.13.0: Drop original .hkt or .sar files directly into " +
+                    "Assets. Native HKT imports as a Unity AnimationClip; SAR " +
+                    "imports as an expandable AnimationClip container. Select " +
+                    "an HKT/SAR source and assign this CAMDO in its import settings " +
+                    "if automatic skeleton matching cannot find it. No .anim " +
+                    "conversion or manual extraction required.",
+                    MessageType.Info);
+                EditorGUILayout.HelpBox(
                     "For Wii U Skells, battle motions are typically stored in hkc.cpk " +
                     "under dl/<Skell ID>.sar, not in the sibling *_rig.hkt beside " +
                     "CAMDO. That HKT is a skeleton. Select an extracted .sar to " +

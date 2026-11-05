@@ -2,6 +2,22 @@
 
 Unity 2022.3+ Editor package for **CPK archive extraction** and inspection/external extraction of **CASM/CANV** map-file pairs. The package does not include third-party executables or game assets.
 
+## Native .HKT and .SAR animation import (v0.13.0)
+
+**No manual `.anim` conversion or `.sar` extraction is needed.** Both extensions now have built-in Unity **ScriptedImporters**, like the existing native model tools and similar to animation containers such as PEMT.
+
+- **`0000_000000_idle_anm.hkt`**: import the original HKT into `Assets/`; when a compatible Skell rig is resolved, the HKT itself appears in Project as a **Unity `AnimationClip`** (main asset), ready to drag into Animator Controller. Original game HKT bytes remain unchanged.
+- **`dl099100.sar`**: import the original archive into `Assets/`; expand it in Project to access **individual `AnimationClip` sub-assets**, named `0000_000000_idle_anm`, `0001_001000_park_st_anm`, and so forth. Its main asset is a **text manifest** listing total entries, generated clips and skipped/unsupported entries; no 444 temporary HKT files or separate `.anim` files are written.
+- **`*_rig.hkt`**: always kept as a **skeleton source**, never misidentified as an AnimationClip.
+
+**Set the Skell rig once:** Unity needs actual bone hierarchy paths such as `Skell_Rig/dl099100_Bone/JD_hip` to animate the model. The importers try to find a CAMDO matching the native skeleton name (e.g. `dl099100_Bone` → `dl099100.camdo`); the CAMDO must have a sibling `dl099100_rig.hkt` in Assets and **Import Skell HKT Hierarchy** enabled. If auto-detection fails, select the HKT or SAR asset and assign **Skell CAMDO** in its import settings, then Apply. The importer uses that CAMDO's existing `flipX` and `modelScale`; exported paths match its skeleton exactly.
+
+**SAR Inspector controls:** `Skell CAMDO`, `Auto-find matching CAMDO`, `Auto Loop Seamless Idle`, `Animation Name Filter` and `Max Clips (0 = All)`. Importing hundreds of 103-bone animations creates many AnimationClip curves and may be slow; a name filter or clip limit enables incremental development. Each supported entry gets a stable sub-asset identifier based on its SAR table index, preserving Animator references across reimports when the archive structure is unchanged.
+
+**How to use the clips:** Put Animator on the imported **CAMDO model root** (the parent of `Skell_Rig`), drag the HKT clip or an expanded SAR clip to your Animator Controller, and ensure the model has **SkinnedMeshRenderer** with valid bone weights. The existing diagnostic command `Tools > XBX2Unity > Animation > Diagnose Skell Clip / Hierarchy` can check binding paths, Animator placement and renderer weights.
+
+**Accuracy and limitations:** Unity's Animator always evaluates **AnimationClip objects**; these are created and serialized internally as imported assets/sub-assets, *not interpreted as raw Havok HKT at runtime*. The current decoder still supports only the validated Havok 2013 **single-block** spline-compressed subset (40-bit THREECOMP40 rotations; zero float tracks). The archive parser recognizes up to 4096 SAR entries and validates source ranges; unsupported codecs, different block layouts or mismatched rig mappings are skipped with an explanation in the manifest rather than generating placeholder motion. The submitted `dl099100.sar` contains **444 HKT entries**, but not all 444 are claimed to decode until Unity import testing verifies them. Rig/SAR contents and materials are never rewritten.
+
 ## Installation (Unity Package Manager)
 
 Window > Package Manager > + > Add package from git URL:

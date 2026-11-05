@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.0 - 2026-11-05 (automatic HKT and SAR animation ScriptedImporters)
+- Add native Unity `ScriptedImporter` handlers for `*.hkt` and `*.sar`: directly use original HKT as an AnimationClip asset, or expand SAR as a clip container, no manual extraction/export to `.anim`.
+- Parse SAR archive entries **in memory** after validating header and bounds, preserving original input files and avoiding 444 temporary HKT files. Import all supported motions as named `AnimationClip` sub-assets; stable IDs use original SAR entry index, with optional name substring filtering and max clip count.
+- Reuse verified HKT spline decoder, 103-track binding logic, CAMDO hierarchy validation, native `flipX` / `modelScale`, optimized static curves and seamless idle looping from existing v0.12.2 manual exporter.
+- Resolve CAMDO via explicit Inspector assignment or automatic name matching (HKT skeleton root name or SAR filename), and read the sibling `*_rig.hkt` for exact bone hierarchy. `*_rig.hkt` itself imports as skeleton source information, never a motion clip.
+- Show an import manifest for SAR with imported/skipped/unsupported counts; rejected files fail visibly instead of creating fabricated animation.
+- Add HKT/SAR inspector settings, AssetImportContext dependencies on matching CAMDO/rig, in-memory native HKT probe with suppressed Base64 debug output, source contract tests and Unity package mappings.
+- Decoder limitations remain: unsupported Havok codecs/multi-block clips are skipped. Actual Unity 2022 Editor import/playback must be tested on user project; CI checks synthetic fixtures/package construction only.
+
+
 ## 0.12.2 - 2026-11-05 (Skell clip root / renderer binding diagnostic)
 - Investigate reported **no visible animation** despite exported native Skell `.anim`. The user-supplied idle clip contains 13 varying rotation groups and one varying position group; `park_st` contains 64 varying rotation groups and two varying position groups, so the sampled clips are **not empty**.
 - Both clips encode 103 × 3 identical `Skell_Rig/<bone hierarchy>` paths. These paths **require the Animator to be on the CAMDO model root**, one parent ABOVE `Skell_Rig`, not on the rig or a detached model child.

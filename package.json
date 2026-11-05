@@ -1,8 +1,8 @@
 {
   "name": "com.musafirex.xbx2unity",
-  "version": "0.12.2",
+  "version": "0.13.0",
   "displayName": "XBX2Unity - Xenoblade X Wii U Native CAMDO Tools",
-  "description": "XBX2Unity native Skell MXMD/GX2 importer, HKT rig and source-linked materials, and Wii U SAR extraction, Havok HKT 2013 single-block spline motion decoder and verified Skell rig to Unity AnimationClip exporter.",
+  "description": "XBX2Unity native Skell MXMD/GX2 importer, HKT rig and source-linked materials, and Wii U native .hkt AnimationClip and .sar multi-clip container ScriptedImporters, Havok spline decoding, rig binding and source-linked Skell materials.",
   "unity": "2022.3",
   "keywords": [
     "xenoblade",
