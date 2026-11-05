@@ -289,6 +289,46 @@ def fixture_native_spline_decoder_contract():
     assert "XBXSkellHktClipExporter.RunSelected()" in INSPECTOR
 
 
+
+def fixture_compact_native_curve_contract():
+    """Two endpoint keys exactly preserve constant poses over the clip.
+
+    This mirrors group-level optimization and validates the expected
+    103-track 201-frame sample budget without bundling game assets.
+    """
+    tracks, frames = 103, 201
+    rotations_dynamic, positions_dynamic, scales_dynamic = 13, 1, 0
+    full = tracks * 3 * frames
+    moving = rotations_dynamic + positions_dynamic + scales_dynamic
+    static = tracks * 3 - moving
+    reduced = moving * frames + static * 2
+    assert (full, moving, static, reduced) == (62109, 14, 295, 3404)
+    assert reduced < full // 15
+
+    constant = [4.117389] * frames
+    compact = [(0, constant[0]), ((frames - 1) / 30, constant[-1])]
+    for frame in range(frames):
+        t = frame / 30
+        alpha = t / compact[1][0]
+        reconstructed = compact[0][1] * (1 - alpha) + compact[1][1] * alpha
+        assert abs(reconstructed - constant[frame]) < 1e-10
+    moving_samples = [0.03 * (i / 100) * (2 - i / 100)
+                      for i in range(frames)]
+    assert moving_samples[0] == moving_samples[-1] == 0
+    # Quaternion group key timings must be kept together; a single channel
+    # cannot be pruned separately from its four-component source rotation.
+    for token in (
+        "bool constant = Uniform(frames)",
+        "BuildCurve(x, fps, constant)",
+        "BuildCurve(w, fps, constant)",
+        "new Keyframe(end, values[0], 0f, 0f)",
+        "bool IsSeamlessIdle(",
+        "AnimationUtility.GetAnimationClipSettings(clip)",
+        "settings.loopTime = true",
+        "Quaternion.Angle(poses.rotations[i][0]",
+    ):
+        assert token in EXPORTER, "Compact curve/idle loop contract missing: " + token
+
 def main():
     for big in (True, False):
         for stride, first_field in ((48, 16), (48, 20), (64, 20)):
@@ -308,6 +348,7 @@ def main():
     fixture_phase2d_raw_pointer_probe()
     fixture_phase2e_ann_and_packed_data()
     fixture_native_spline_decoder_contract()
+    fixture_compact_native_curve_contract()
     for item in (
         "hkPackfileHeader", "HktMagic", "MaxFiles = 4096",
         "MaxBatchBytes", "CountFixups", "__classnames__",
@@ -336,7 +377,7 @@ def main():
     assert "Editor/XBXSkellHktMotionAudit.cs" in BUILDER
     assert "Editor/XBXSkellHktMotionAudit.cs.meta" in BUILDER
     assert "HKT" in README and "AnimationClip" in README
-    print("Synthetic Havok metadata, spline 40-bit quaternion/de Boor, rig-path clip export and packaging contracts OK")
+    print("Synthetic HKT metadata, spline decoding, compact static curves, verified seamless idle loop and package contracts OK")
 
 
 if __name__ == "__main__":

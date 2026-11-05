@@ -44,6 +44,21 @@ To test the source terrain mask rather than guessing:
 The generated `XBX2Unity/Map Vertex Blend` shader is a simple unlit two-layer debug shader targeting Built-in and URP. It is not verified in HDRP. No GLTF conversion or editing of CAMDO/CASMT files is required.
 
 
+## Skell Animation v0.12.1 — compact real curves, automatic loop for seamless idle
+
+Independent analysis of the user's real generated `0000_000000_idle_anm_native.anim` alongside the binary `0000_000000_idle_anm.hkt`, `dl099100.sar` and `dl099100.camdo` confirms:
+
+- `dl099100.sar` has **444 indexed HKT entries**, all physically in bounds; the supplied 11,200-byte idle HKT **matches the first SAR entry byte-for-byte**.
+- `AnimationClip` serialized as real Unity YAML: 103 rotation, 103 position and 103 scale curves, **201 time-ordered keys per curve**, 30 FPS, 6.6667 seconds; every one of the 103 HKT annotation labels appears exactly once as an AnimationClip path leaf.
+- Actual motion matches the HKT masks: **13 dynamic rotation curves, one dynamic position curve (JD_hip), zero dynamic scale curves**. The remaining **295 vector/quaternion curve groups are constant**. No nonfinite quaternion/transform values, quaternion sign flips or nonmonotonic keyframe times found.
+- The exported idle had `m_LoopTime: 0` although every track's first and last key values match exactly. The original 20.68 MB `.anim` also duplicated 201 keys on every static transform.
+
+The v0.12.1 exporter **preserves all 201 frames for 14 moving curve groups**, but replaces each of 295 constant vector/quaternion groups with **two identical endpoint keys**, maintaining the exact static pose and duration while keeping consistent quaternion component timestamps. A manually validated transformation of the uploaded Unity YAML shrinks it from **20,683,697 bytes to 1,585,811 bytes (92.33%)**, with the exact dynamic key values and sample timestamps unchanged. Actual Unity-generated file size may differ.
+
+For motion filenames containing `idle`, the exporter sets `AnimationClipSettings.loopTime` only when all 103 decoded tracks have matching initial and final local position/scale (tolerance 0.0001 units) and quaternion rotation (0.1 degree); attack/movement clips are **not automatically looped**. Source `.hkt`, `.camdo`, `*_rig.hkt`, Skell geometry, materials and existing `.anim` assets remain untouched. Create a **new** .anim using the existing Phase 2F command to benefit from the optimization.
+
+**Limitations:** These are format/curve-level checks on the submitted files, not an in-game deformation proof. The user has not provided the sibling `dl099100_rig.hkt` in this file set; the exporter validates that separate rig in the actual Unity project. The original CAMDO contains bone-name strings but not enough evidence by itself to verify every rig parent transform or skinning result. Native Unity compilation/Animator playback must still be tested.
+
 ## Skell Animation Phase 2F — real native Skell .anim exporter (v0.12.0)
 
 The user's latest Phase 2E report of real `0000_000000_idle_anm.hkt` includes the exact 2,416-byte `m_data` compressed payload in Base64 with SHA-256 `720c4647a07950042e2cab571614603540d2c01053be713d57319e959635bd30`. We **independently reconstructed** that payload from the report, read all 103 Havok transform-track masks and every scalar/rotation stream, and consumed **exactly 2,416 of 2,416 source bytes**, including alignment padding. There are 13 dynamic quaternion tracks, one dynamic translation track, the remainder static/identity; scale masks are all identity. Native spline payloads are **little-endian**, even though the outer Wii U Havok packfile is **big-endian**. The 40-bit 3-component quaternion unpacker and cubic B-spline evaluation yielded plausible, normalized poses at frames 0/50/100/150/200, and loop endpoints matched on this real idle source.
