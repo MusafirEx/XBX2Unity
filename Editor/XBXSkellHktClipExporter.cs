@@ -63,11 +63,8 @@ namespace MusafirEx.XBX2Unity.Editor
                 XBXSkellHktMotionAudit.MotionProbe motion =
                     XBXSkellHktMotionAudit.ExtractNativeSpline(source);
                 XBXSkellHktRig.Skeleton skeleton = XBXSkellHktRig.Read(rig);
-                string[] bonePaths = ValidateRig(motion, skeleton, prefab);
                 XBXSkellHktSplineDecoder.Poses poses =
                     XBXSkellHktSplineDecoder.Decode(motion);
-                if (poses.trackCount != bonePaths.Length)
-                    throw new InvalidDataException("Decoded track count differs from validated rig map.");
 
                 string targetPath = EditorUtility.SaveFilePanelInProject(
                     "Save native Skell AnimationClip",
@@ -78,44 +75,11 @@ namespace MusafirEx.XBX2Unity.Editor
                 if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(targetPath) != null)
                     throw new IOException("Refusing to overwrite existing asset: " + targetPath);
 
-                clip = new AnimationClip
-                {
-                    name = Path.GetFileNameWithoutExtension(targetPath),
-                    frameRate = 1f / motion.frameDurationSeconds,
-                    legacy = false
-                };
-                for (int t = 0; t < poses.trackCount; t++)
-                {
-                    string path = bonePaths[t];
-                    var pos = new Vector3[poses.frameCount];
-                    var rot = new Quaternion[poses.frameCount];
-                    for (int f = 0; f < poses.frameCount; f++)
-                    {
-                        Vector3 p = poses.positions[t][f] * importer.modelScale;
-                        Quaternion q = poses.rotations[t][f];
-                        if (importer.flipX)
-                        {
-                            p.x = -p.x;
-                            q = new Quaternion(q.x, -q.y, -q.z, q.w);
-                        }
-                        pos[f] = p;
-                        rot[f] = q;
-                    }
-                    SetVector3(clip, path, "m_LocalPosition", pos, clip.frameRate);
-                    SetQuaternion(clip, path, rot, clip.frameRate);
-                    SetVector3(clip, path, "m_LocalScale", poses.scales[t],
-                        clip.frameRate);
-                }
-                clip.EnsureQuaternionContinuity();
-                // Only automatically loop an explicit idle animation whose
-                // sampled transforms return to their initial state.
-                bool isSeamlessIdle = IsSeamlessIdle(source, poses);
-                if (isSeamlessIdle)
-                {
-                    var settings = AnimationUtility.GetAnimationClipSettings(clip);
-                    settings.loopTime = true;
-                    AnimationUtility.SetAnimationClipSettings(clip, settings);
-                }
+                clip = BuildClip(Path.GetFileNameWithoutExtension(targetPath),
+                    motion, poses, skeleton, prefab,
+                    importer.flipX, importer.modelScale, true);
+                bool isSeamlessIdle =
+                    AnimationUtility.GetAnimationClipSettings(clip).loopTime;
                 AssetDatabase.CreateAsset(clip, targetPath);
                 AssetDatabase.SaveAssets();
                 // Force serialized clip import/binding refresh. A supplied
@@ -159,6 +123,68 @@ namespace MusafirEx.XBX2Unity.Editor
                     UnityEngine.Object.DestroyImmediate(clip);
                 Debug.LogError("[XBX2Unity] HKT AnimationClip export failed: " + ex);
                 EditorUtility.DisplayDialog("XBX2Unity HKT Animation", ex.Message, "OK");
+            }
+        }
+
+        // Shared source of truth for direct .hkt, .sar sub-asset and manual
+        // .anim workflows. Real decoder, rig binding, loop logic and optimized
+        // static curves are identical for every import route.
+        internal static AnimationClip BuildClip(string clipName,
+            XBXSkellHktMotionAudit.MotionProbe motion,
+            XBXSkellHktSplineDecoder.Poses poses,
+            XBXSkellHktRig.Skeleton skeleton,
+            GameObject prefab, bool flipX, float modelScale, bool autoLoopIdle)
+        {
+            string[] bonePaths = ValidateRig(motion, skeleton, prefab);
+            if (poses.trackCount != bonePaths.Length ||
+                poses.frameCount < 2 || motion.frameDurationSeconds <= 0f)
+                throw new InvalidDataException(
+                    "Decoded samples/bone map or native frame duration do not match");
+            AnimationClip clip = null;
+            try
+            {
+                clip = new AnimationClip
+                {
+                    name = clipName,
+                    frameRate = 1f / motion.frameDurationSeconds,
+                    legacy = false
+                };
+                for (int t = 0; t < poses.trackCount; t++)
+                {
+                    string path = bonePaths[t];
+                    var pos = new Vector3[poses.frameCount];
+                    var rot = new Quaternion[poses.frameCount];
+                    for (int frame = 0; frame < poses.frameCount; frame++)
+                    {
+                        Vector3 p = poses.positions[t][frame] * modelScale;
+                        Quaternion q = poses.rotations[t][frame];
+                        if (flipX)
+                        {
+                            p.x = -p.x;
+                            q = new Quaternion(q.x, -q.y, -q.z, q.w);
+                        }
+                        pos[frame] = p;
+                        rot[frame] = q;
+                    }
+                    SetVector3(clip, path, "m_LocalPosition", pos, clip.frameRate);
+                    SetQuaternion(clip, path, rot, clip.frameRate);
+                    SetVector3(clip, path, "m_LocalScale", poses.scales[t],
+                        clip.frameRate);
+                }
+                clip.EnsureQuaternionContinuity();
+                if (autoLoopIdle && IsSeamlessIdle(clipName, poses))
+                {
+                    var settings = AnimationUtility.GetAnimationClipSettings(clip);
+                    settings.loopTime = true;
+                    AnimationUtility.SetAnimationClipSettings(clip, settings);
+                }
+                return clip;
+            }
+            catch
+            {
+                if (clip != null)
+                    UnityEngine.Object.DestroyImmediate(clip);
+                throw;
             }
         }
 
