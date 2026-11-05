@@ -51,6 +51,15 @@ namespace MusafirEx.XBX2Unity.Editor
                     throw new InvalidDataException(
                         "Imported CAMDO does not have Skell_Rig. Reimport with Skell HKT hierarchy.");
 
+                int skinCount =
+                    prefab.GetComponentsInChildren<SkinnedMeshRenderer>(true).Length;
+                int staticCount =
+                    prefab.GetComponentsInChildren<MeshRenderer>(true).Length;
+                if (skinCount == 0)
+                    Debug.LogWarning("[XBX2Unity] CAMDO has ZERO SkinnedMeshRenderer " +
+                        "components: the generated .anim may move bones, but the model " +
+                        "mesh cannot deform. Enable Import Skell Bone Weights in CAMDO " +
+                        "Rig tab and reimport. Static MeshRenderer count=" + staticCount);
                 XBXSkellHktMotionAudit.MotionProbe motion =
                     XBXSkellHktMotionAudit.ExtractNativeSpline(source);
                 XBXSkellHktRig.Skeleton skeleton = XBXSkellHktRig.Read(rig);
@@ -109,8 +118,22 @@ namespace MusafirEx.XBX2Unity.Editor
                 }
                 AssetDatabase.CreateAsset(clip, targetPath);
                 AssetDatabase.SaveAssets();
-                EditorGUIUtility.PingObject(clip);
-                Selection.activeObject = clip;
+                // Force serialized clip import/binding refresh. A supplied
+                // park_st .anim had real Quaternion/Vector3 curves but an
+                // empty m_ClipBindingConstant.genericBindings table.
+                AssetDatabase.ImportAsset(targetPath, ImportAssetOptions.ForceUpdate);
+                AnimationClip persistedClip =
+                    AssetDatabase.LoadAssetAtPath<AnimationClip>(targetPath);
+                if (persistedClip == null)
+                    throw new InvalidDataException("Unity could not reload saved .anim");
+                EditorCurveBinding[] generatedBindings =
+                    AnimationUtility.GetCurveBindings(persistedClip);
+                if (generatedBindings.Length == 0)
+                    Debug.LogWarning("[XBX2Unity] Exported .anim has no Unity " +
+                        "registered curve bindings after reimport. Use the " +
+                        "Skell Animation Binding Diagnostic tool.");
+                EditorGUIUtility.PingObject(persistedClip);
+                Selection.activeObject = persistedClip;
                 Debug.Log("[XBX2Unity] Native HKT spline AnimationClip saved: " +
                     targetPath + "; " + poses.trackCount + " tracks x " +
                     poses.frameCount + " frames at " + clip.frameRate.ToString("F4") +
@@ -124,8 +147,10 @@ namespace MusafirEx.XBX2Unity.Editor
                     "Created " + Path.GetFileName(targetPath) + " with " +
                     poses.trackCount + " mapped bones and " + poses.frameCount +
                     " sampled frames. Source HKT, CAMDO, rig and materials were not changed." +
-                    "\n\nEnsure the CAMDO has Import Skell Bone Weights enabled " +
-                    "to see a skinned mesh deform, then test the clip in Animator.",
+                    "\n\nPut Animator on the CAMDO MODEL ROOT (parent of Skell_Rig)." +
+                    "\nSkinnedMeshRenderers: " + skinCount +
+                    " | Static MeshRenderers: " + staticCount +
+                    "\nIf mesh remains static, run Diagnose Skell Clip / Hierarchy.",
                     "OK");
             }
             catch (Exception ex)
