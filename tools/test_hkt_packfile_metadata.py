@@ -441,6 +441,81 @@ def fixture_native_hkt_sar_asset_import_contract():
     assert len(set(serialized_ids)) == len(serialized_ids)
 
 
+def fixture_compatible_skell_animation_sharing():
+    """Compatible Skell retargeting is a strictly bounded ROOT alias.
+
+    Source/user CAMDO comparison confirms name/offset equivalence for 228
+    entries, but binary rig parent hierarchy must still be verified by Unity.
+    """
+    def skell_root(s):
+        return (len(s) == 13 and s.startswith("dl") and
+                s.endswith("_Bone") and s[2:8].isdigit())
+
+    assert skell_root("dl099100_Bone")
+    assert skell_root("dl099110_Bone")
+    assert not skell_root("dl0991_Bone")
+    assert not skell_root("SomeOther_Bone")
+
+    # Track-to-bone associations must all match the same index and name.
+    bones = ["dl099100_Bone", "JD_hip", "JU_head", "JU_arm_L", "JU_arm_R"]
+    target = ["dl099110_Bone", "JD_hip", "JU_head", "JU_arm_L", "JU_arm_R"]
+    binding = [0, 1, 3, 2, 4]
+    annotations = [bones[x] for x in binding]
+
+    def compatible(target_bones):
+        if len(target_bones) != len(bones):
+            return False
+        seen = set()
+        for track, bone in enumerate(binding):
+            if bone in seen:
+                return False
+            seen.add(bone)
+            expected, actual = annotations[track], target_bones[bone]
+            if expected != actual and not (
+                bone == 0 and expected == annotations[0] and
+                skell_root(expected) and skell_root(actual)):
+                return False
+        return True
+
+    assert compatible(target)
+    assert not compatible(["dl099110_Bone", "JD_hip", "JU_head", "JU_arm_R", "JU_arm_L"])
+    assert not compatible(target + ["extra_bone"])
+    assert not compatible(["UnrelatedRoot"] + target[1:])
+
+    for phrase in (
+        "bool allowCompatibleRootAlias = false",
+        "motion, skeleton, prefab, allowCompatibleRootAlias",
+        "skeleton.bones.Count == motion.trackCount",
+        "skeleton.bones[bone].parent == -1",
+        "string.Equals(expected, motion.skeletonName,",
+        "IsNativeSkellRootName(expected)",
+        "IsNativeSkellRootName(actual)",
+        "Compatible Skell sharing only permits",
+    ):
+        assert phrase in EXPORTER, "Strict compatible rig validation missing: " + phrase
+
+    for phrase in (
+        "compatibleSkellCamdos",
+        "ResolveVariants(",
+        "BuildForTarget(",
+        "TargetGuid(",
+        "VariantName(",
+        'ctx.AddObjectToAsset("compatible_" +',
+        'ctx.AddObjectToAsset("main", clip);',
+        'ctx.AddObjectToAsset("motion_" + entry.index.ToString("D4"), clip);',
+        '"motion_" + entry.index.ToString("D4") +',
+        "importedCompatible++",
+        "Total AnimationClip sub-assets:",
+    ):
+        assert phrase in AUTOIMPORT, "Compatible Skell variant importer missing: " + phrase
+
+    assert AUTOINSPECTOR.count('new GUIContent("Compatible Skell CAMDOs")') == 2
+    assert "Compatible Skell CAMDOs" in README
+    assert "Compatible Skell" in README
+    # Original stable source IDs are retained, variants derive GUIDs from
+    # target CAMDOs so reorder of additional targets will not break references.
+
+
 def main():
     for big in (True, False):
         for stride, first_field in ((48, 16), (48, 20), (64, 20)):
@@ -463,6 +538,7 @@ def main():
     fixture_compact_native_curve_contract()
     fixture_playback_diagnostics_contract()
     fixture_native_hkt_sar_asset_import_contract()
+    fixture_compatible_skell_animation_sharing()
     for item in (
         "hkPackfileHeader", "HktMagic", "MaxFiles = 4096",
         "MaxBatchBytes", "CountFixups", "__classnames__",
@@ -491,7 +567,7 @@ def main():
     assert "Editor/XBXSkellHktMotionAudit.cs" in BUILDER
     assert "Editor/XBXSkellHktMotionAudit.cs.meta" in BUILDER
     assert "HKT" in README and "AnimationClip" in README
-    print("Synthetic HKT/SAR metadata, native ScriptedImporters, rig-bound clip subassets and package contracts OK")
+    print("Synthetic HKT/SAR native import, strict 099100/099110 root alias, stable multi-Skell clip variants OK")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,25 @@
 
 Unity 2022.3+ Editor package for **CPK archive extraction** and inspection/external extraction of **CASM/CANV** map-file pairs. The package does not include third-party executables or game assets.
 
+## Compatible Skell cross-model animation sharing (v0.13.1)
+
+**Verified source observation:** the user supplied native `dl099100.camdo` and `dl099110.camdo`. Both files are **827,392 bytes**, are MXMD, and contain **228 recognizably bone-name string entries, in identical names and byte offsets** (90 unique `EX_`/`JD_`/`JU_`/`TW_` names), while their distinct roots are **`dl099100_Bone`** versus **`dl099110_Bone`**. Their geometry differs substantially; equality of the full `*_rig.hkt` parent hierarchy and bind pose is **not yet independently proven** because those rig files were not uploaded.
+
+**Root path problem:** Unity AnimationClip curves refer to exact Transform paths. A clip rooted at `Skell_Rig/dl099100_Bone/...` does **not** automatically animate a model rooted at `Skell_Rig/dl099110_Bone/...`. Previous HKT and SAR importers also rejected different root bone names outright.
+
+**Fix:** v0.13.1 permits **only** a recognized native `dlXXXXXX_Bone` → `dlYYYYYY_Bone` alias for the single skeleton root, and **only when all other track annotation names match exactly at the same track-to-bone indices**, target skeleton bone count matches the animation track count, its root has parent `-1`, and every target bone's resolved Transform path exists in the imported CAMDO. It reuses real decoded spline poses and constructs *new target-rooted AnimationClip curves*; it does not change the HKT binary or blindly assign animation to unmatched bones. Other bone differences abort that target variant.
+
+**Use the same `dl099100.sar` on both Skells without separate `.anim` files:**
+1. Import `dl099100.camdo` and `dl099110.camdo` with their respective `*_rig.hkt` next to each CAMDO and the HKT hierarchy enabled. Make sure skinning works.
+2. Select `dl099100.sar` in Project. In its Inspector set **Skell CAMDO** to the `dl099100.camdo` imported GameObject. Expand **Compatible Skell CAMDOs** to size **1** and assign `dl099110.camdo`. Click Apply.
+3. Expand `dl099100.sar` in Project. It now contains both original source animation clips (e.g. `0000_000000_idle_anm`) **and** target-specific variants (e.g. `0000_000000_idle_anm__dl099110`) under the same SAR, without new on-disk `.anim` files. Drag `__dl099110` clip to the Animator on the `dl099110` CAMDO root; use the source clip on `dl099100`.
+4. For individual HKT files, the **Compatible Skell CAMDOs** array similarly creates target-specific child AnimationClips while retaining the original HKT main AnimationClip. Alternatively, set its primary **Skell CAMDO** to the `dl099110` model if you only need the target clip.
+5. Start with **Animation Name Filter = `idle`** or **Max Clips = 1** to test compatibility quickly before importing hundreds of animations twice. Inspect the SAR manifest and Console warnings for unsupported codecs or unmatched bones.
+
+Stable sub-asset identifiers of pre-existing source `motion_####` clips are preserved; new variants use the original SAR entry index plus the **target CAMDO asset GUID**, so reordering the compatible target list does not invalidate Animator references. Importer dependencies track the CAMDO and its rig; models, materials, source archive and source HKT stay untouched.
+
+**Scope:** This is **same-index, same-joint retargeting with a safe root-name alias**, not automatic animation retargeting between unrelated skeletons. If the actual `dl099100_rig.hkt` and `dl099110_rig.hkt` have different hierarchy/bind poses, further pose-space retargeting may be needed. Root bone compatibility and visual playback must be checked in Unity; GitHub CI does not compile the Unity Editor.
+
 ## Native .HKT and .SAR animation import (v0.13.0)
 
 **No manual `.anim` conversion or `.sar` extraction is needed.** Both extensions now have built-in Unity **ScriptedImporters**, like the existing native model tools and similar to animation containers such as PEMT.

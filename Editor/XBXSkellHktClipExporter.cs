@@ -77,7 +77,7 @@ namespace MusafirEx.XBX2Unity.Editor
 
                 clip = BuildClip(Path.GetFileNameWithoutExtension(targetPath),
                     motion, poses, skeleton, prefab,
-                    importer.flipX, importer.modelScale, true);
+                    importer.flipX, importer.modelScale, true, true);
                 bool isSeamlessIdle =
                     AnimationUtility.GetAnimationClipSettings(clip).loopTime;
                 AssetDatabase.CreateAsset(clip, targetPath);
@@ -133,9 +133,11 @@ namespace MusafirEx.XBX2Unity.Editor
             XBXSkellHktMotionAudit.MotionProbe motion,
             XBXSkellHktSplineDecoder.Poses poses,
             XBXSkellHktRig.Skeleton skeleton,
-            GameObject prefab, bool flipX, float modelScale, bool autoLoopIdle)
+            GameObject prefab, bool flipX, float modelScale, bool autoLoopIdle,
+            bool allowCompatibleRootAlias = false)
         {
-            string[] bonePaths = ValidateRig(motion, skeleton, prefab);
+            string[] bonePaths = ValidateRig(
+                motion, skeleton, prefab, allowCompatibleRootAlias);
             if (poses.trackCount != bonePaths.Length ||
                 poses.frameCount < 2 || motion.frameDurationSeconds <= 0f)
                 throw new InvalidDataException(
@@ -197,7 +199,8 @@ namespace MusafirEx.XBX2Unity.Editor
         }
 
         private static string[] ValidateRig(XBXSkellHktMotionAudit.MotionProbe motion,
-            XBXSkellHktRig.Skeleton skeleton, GameObject prefab)
+            XBXSkellHktRig.Skeleton skeleton, GameObject prefab,
+            bool allowCompatibleRootAlias)
         {
             if (motion.trackToBone == null || motion.annotationNames == null ||
                 motion.trackToBone.Length != motion.trackCount ||
@@ -206,8 +209,13 @@ namespace MusafirEx.XBX2Unity.Editor
             if (skeleton.bones.Count < motion.trackCount)
                 throw new InvalidDataException(
                     "Target skeleton has fewer bones than HKT transform tracks.");
+            // Root alias retargeting is only valid when the entire tracked
+            // skeleton is structurally compatible: the sole allowed name
+            // difference is bone[0] from dlXXXXXX_Bone to dlYYYYYY_Bone.
+            // No heuristic remap of individual joints or unvalidated bones.
             var visited = new HashSet<int>();
             var paths = new string[motion.trackCount];
+            bool rootAliased = false;
             for (int t = 0; t < motion.trackCount; t++)
             {
                 int bone = motion.trackToBone[t];
@@ -218,15 +226,45 @@ namespace MusafirEx.XBX2Unity.Editor
                 string expected = motion.annotationNames[t];
                 string actual = skeleton.bones[bone].name;
                 if (!string.Equals(expected, actual, StringComparison.Ordinal))
-                    throw new InvalidDataException(
-                        "Track " + t + " requires bone[" + bone + "] '" +
-                        expected + "', but selected rig has '" + actual + "'.");
+                {
+                    bool compatibleRoot = allowCompatibleRootAlias &&
+                        bone == 0 && skeleton.bones[bone].parent == -1 &&
+                        skeleton.bones.Count == motion.trackCount &&
+                        string.Equals(expected, motion.skeletonName,
+                            StringComparison.Ordinal) &&
+                        IsNativeSkellRootName(expected) &&
+                        IsNativeSkellRootName(actual);
+                    if (!compatibleRoot)
+                        throw new InvalidDataException(
+                            "Track " + t + " requires bone[" + bone + "] '" +
+                            expected + "', but target rig has '" + actual +
+                            "'. Compatible Skell sharing only permits the " +
+                            "dlXXXXXX_Bone ROOT alias; every other joint must " +
+                            "match its original name AND bone index.");
+                    rootAliased = true;
+                }
                 paths[t] = PathForBone(skeleton, bone);
                 if (prefab.transform.Find(paths[t]) == null)
                     throw new InvalidDataException(
                         "Imported prefab is missing animation path: " + paths[t]);
             }
+            if (rootAliased)
+                Debug.Log("[XBX2Unity] Compatible Skell animation root retarget: " +
+                    motion.skeletonName + " -> " + skeleton.bones[0].name +
+                    " | Verified " + motion.trackCount +
+                    " bone index/name assignments and target Transform paths.");
             return paths;
+        }
+
+        private static bool IsNativeSkellRootName(string name)
+        {
+            if (string.IsNullOrEmpty(name) || name.Length != 13 ||
+                !name.StartsWith("dl", StringComparison.Ordinal) ||
+                !name.EndsWith("_Bone", StringComparison.Ordinal))
+                return false;
+            for (int i = 2; i < 8; i++)
+                if (name[i] < '0' || name[i] > '9') return false;
+            return true;
         }
 
         private static string PathForBone(XBXSkellHktRig.Skeleton skeleton, int bone)

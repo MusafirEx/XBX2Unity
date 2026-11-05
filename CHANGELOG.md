@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.1 - 2026-11-05 (compatible Skell HKT/SAR animation sharing)
+- Binary compare the user's two actual CAMDOs: `dl099100` and `dl099110` are both 827,392 bytes (MXMD) and have **228 identical bone-name string occurrences with the same offsets**; root names differ (`dl099100_Bone` versus `dl099110_Bone`). Full skeleton hierarchy/bind pose equivalence is NOT asserted without the original `*_rig.hkt` files.
+- Fix imported animation root path mismatch by allowing only `dlXXXXXX_Bone` → `dlYYYYYY_Bone` root alias, while enforcing exact nonroot bone name and index matches, target transform path checks, 1:1 target skeleton size, and parent -1 on the root.
+- Add **Compatible Skell CAMDOs** list to HKT/SAR ScriptedImporter inspectors. A single HKT or SAR can produce original clips plus target-rooted compatible `AnimationClip` sub-assets, without external .anim files and without duplicating compressed spline decoding per target.
+- Keep original SAR `motion_####` sub-asset identifiers stable. Compatible variants use target CAMDO GUID suffix, so swapping target order does not break Animator references.
+- Add regression contracts for accepted/rejected root aliases, exact joint-name checks and new variant IDs. No source HKT/SAR/CAMDO/rig/material asset overwrites.
+- Limited to verified single-block spline codec; visual playback and rig bind-pose parity require Unity Editor/user validation.
+
+
 ## 0.13.0 - 2026-11-05 (automatic HKT and SAR animation ScriptedImporters)
 - Add native Unity `ScriptedImporter` handlers for `*.hkt` and `*.sar`: directly use original HKT as an AnimationClip asset, or expand SAR as a clip container, no manual extraction/export to `.anim`.
 - Parse SAR archive entries **in memory** after validating header and bounds, preserving original input files and avoiding 444 temporary HKT files. Import all supported motions as named `AnimationClip` sub-assets; stable IDs use original SAR entry index, with optional name substring filtering and max clip count.
