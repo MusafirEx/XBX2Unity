@@ -17,6 +17,8 @@ README = (ROOT / "README.md").read_text(encoding="utf-8")
 DECODER = (ROOT / "Editor/XBXSkellHktSplineDecoder.cs").read_text(encoding="utf-8")
 EXPORTER = (ROOT / "Editor/XBXSkellHktClipExporter.cs").read_text(encoding="utf-8")
 DIAGNOSTIC = (ROOT / "Editor/XBXSkellAnimationBindingDiagnostics.cs").read_text(encoding="utf-8")
+AUTOIMPORT = (ROOT / "Editor/XBXSkellNativeMotionImporters.cs").read_text(encoding="utf-8")
+AUTOINSPECTOR = (ROOT / "Editor/XBXSkellNativeMotionImporterInspectors.cs").read_text(encoding="utf-8")
 MAGIC = b"\x57\xe0\xe0\x57\x10\xc0\xc0\x10"
 CLASSES = ("hkRootLevelContainer", "hkaSplineCompressedAnimation",
            "hkaAnimationBinding", "hkaAnimationContainer")
@@ -371,6 +373,74 @@ def fixture_playback_diagnostics_contract():
     assert "XBXSkellAnimationBindingDiagnostics.cs.meta" in BUILDER
 
 
+def fixture_native_hkt_sar_asset_import_contract():
+    """Source-contract regression for automatic HKT / SAR Unity imports.
+
+    Real CAMDO rig lookup and Animator playback require Unity Editor; synthetic
+    checks here verify no file extraction, deterministic subasset IDs and
+    exact reuse of the previously tested decoder and rig curve construction.
+    """
+    for phrase in (
+        '[ScriptedImporter(1, "hkt")]',
+        '[ScriptedImporter(1, "sar")]',
+        'public sealed class XBXSkellHktAssetImporter',
+        'public sealed class XBXSkellSarAssetImporter',
+        'ctx.AddObjectToAsset("main", clip);',
+        'ctx.SetMainObject(clip);',
+        'ctx.AddObjectToAsset("motion_" + entry.index.ToString("D4"), clip);',
+        'ctx.SetMainObject(manifest);',
+        'XBXSkellHktMotionAudit.ExtractNativeSpline(hkt, name)',
+        'XBXSkellSarAnimationAudit.Read(ctx.assetPath)',
+        'XBXSkellHktSplineDecoder.Decode(source)',
+        'XBXSkellHktClipExporter.BuildClip(',
+        'File.ReadAllBytes(ctx.assetPath)',
+        'Buffer.BlockCopy(sar, (int)entry.offset, hkt, 0, entry.size)',
+        'ctx.DependsOnSourceAsset(rigAssetPath);',
+        'ctx.DependsOnArtifact(path);',
+        'Import Skell HKT Hierarchy',
+        'autoFindSkellCamdo',
+        'nameContains',
+        'maxClips',
+        'loopSeamlessIdle',
+        'ctx.LogImportWarning',
+        'IsRig(ctx.assetPath)',
+    ):
+        assert phrase in AUTOIMPORT, "HKT/SAR auto-import contract missing: " + phrase
+    assert 'File.WriteAllBytes(' not in AUTOIMPORT
+    assert 'File.WriteAllText(' not in AUTOIMPORT
+    for phrase in (
+        'XBXSkellHktAssetImporterInspector',
+        'XBXSkellSarAssetImporterInspector',
+        'ApplyRevertGUI()',
+        'Skell CAMDO',
+        'Max Clips (0 = All)',
+    ):
+        assert phrase in AUTOINSPECTOR, "Auto-importer inspector missing: " + phrase
+    assert 'internal static MotionProbe ExtractNativeSpline(byte[] bytes, string entryName)' in SOURCE
+    assert 'ReadBytes(File.ReadAllBytes(path), path, verboseSplineProbe, true)' in SOURCE
+    assert 'ProbeSplineStream(data, sections, result, includeReport)' in SOURCE
+    assert 'if (includeReport && payload.Length <= 8192)' in SOURCE
+    assert 'internal static AnimationClip BuildClip(' in EXPORTER
+    assert 'XBXSkellNativeMotionImporters.cs' in BUILDER
+    assert 'XBXSkellNativeMotionImporters.cs.meta' in BUILDER
+    assert 'XBXSkellNativeMotionImporterInspectors.cs' in BUILDER
+    assert 'XBXSkellNativeMotionImporterInspectors.cs.meta' in BUILDER
+    assert 'XBXSkellHktAssetImporter' in README
+
+    # The SAR manifest should identify unsupported entries rather than silently
+    # declaring 444 convertible motions; binary entries are sliced from the
+    # validated archive by original offsets and converted in memory.
+    source_entries = [
+        (0, "000000_idle_anm.hkt", bytes([0x57, 0xe0, 0xe0, 0x57])),
+        (1, "001000_park_st_anm.hkt", bytes([0x57, 0xe0, 0xe0, 0x57])),
+    ]
+    assert [f"{i:04d}_{name[:-4]}" for i, name, _ in source_entries] == [
+        "0000_000000_idle_anm", "0001_001000_park_st_anm"
+    ]
+    serialized_ids = [f"motion_{i:04d}" for i, _, _ in source_entries]
+    assert len(set(serialized_ids)) == len(serialized_ids)
+
+
 def main():
     for big in (True, False):
         for stride, first_field in ((48, 16), (48, 20), (64, 20)):
@@ -392,6 +462,7 @@ def main():
     fixture_native_spline_decoder_contract()
     fixture_compact_native_curve_contract()
     fixture_playback_diagnostics_contract()
+    fixture_native_hkt_sar_asset_import_contract()
     for item in (
         "hkPackfileHeader", "HktMagic", "MaxFiles = 4096",
         "MaxBatchBytes", "CountFixups", "__classnames__",
@@ -420,7 +491,7 @@ def main():
     assert "Editor/XBXSkellHktMotionAudit.cs" in BUILDER
     assert "Editor/XBXSkellHktMotionAudit.cs.meta" in BUILDER
     assert "HKT" in README and "AnimationClip" in README
-    print("Synthetic HKT spline and compact curves; Skell playback hierarchy/skinning diagnostic source contracts OK")
+    print("Synthetic HKT/SAR metadata, native ScriptedImporters, rig-bound clip subassets and package contracts OK")
 
 
 if __name__ == "__main__":
