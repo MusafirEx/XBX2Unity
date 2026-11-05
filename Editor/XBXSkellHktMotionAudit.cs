@@ -342,12 +342,33 @@ namespace MusafirEx.XBX2Unity.Editor
             return result.motion;
         }
 
+        // Parse SAR HKT entries in memory, without temporary .hkt files.
+        // The importer deliberately does not emit raw Base64 diagnostics.
+        internal static MotionProbe ExtractNativeSpline(byte[] bytes, string entryName)
+        {
+            Result result = ReadBytes(bytes, entryName, true, false);
+            if (!result.Valid || result.motion == null ||
+                result.motion.packedSplineData == null ||
+                result.motion.annotationNames == null ||
+                result.motion.annotationNames.Length != result.motion.trackCount)
+                throw new InvalidDataException("Unsupported or invalid native HKT motion: " +
+                    entryName + ". Only a verified single-block spline is currently supported.");
+            return result.motion;
+        }
+
         internal static Result Read(string path, bool verboseSplineProbe = false)
         {
             FileInfo fi = new FileInfo(path);
-            if (fi.Length < 208 || fi.Length > MaxFileBytes)
+            if (!fi.Exists || fi.Length < 208 || fi.Length > MaxFileBytes)
                 throw new InvalidDataException("HKT header outside supported length");
-            byte[] data = File.ReadAllBytes(path);
+            return ReadBytes(File.ReadAllBytes(path), path, verboseSplineProbe, true);
+        }
+
+        private static Result ReadBytes(byte[] data, string path,
+            bool verboseSplineProbe, bool includeReport)
+        {
+            if (data == null || data.Length < 208 || data.Length > MaxFileBytes)
+                throw new InvalidDataException("In-memory HKT header outside supported length");
             for (int i = 0; i < HktMagic.Length; i++)
                 if (data[i] != HktMagic[i])
                     throw new InvalidDataException("Not a native Havok HKT packfile");
@@ -470,7 +491,7 @@ namespace MusafirEx.XBX2Unity.Editor
             }
             if (verboseSplineProbe && result.motion != null)
             {
-                try { ProbeSplineStream(data, sections, result); }
+                try { ProbeSplineStream(data, sections, result, includeReport); }
                 catch (InvalidDataException ex)
                 {
                     result.warnings.Add("Phase 2D raw byte probe not available: " + ex.Message);
@@ -730,7 +751,7 @@ namespace MusafirEx.XBX2Unity.Editor
         // fixup stride is not proof that the records contain spline samples.
         // Never create sampled poses or assign Unity bone curves here.
         private static void ProbeSplineStream(byte[] data, Section[] sections,
-            Result result)
+            Result result, bool includeReport)
         {
             ObjectRef anim = result.objects.FirstOrDefault(o =>
                 o.className == "hkaSplineCompressedAnimation");
@@ -789,7 +810,7 @@ namespace MusafirEx.XBX2Unity.Editor
                 if (bestCount == result.motion.trackCount)
                     decodedLayout = ProbeAnnotationAndPackedArrays(
                         data, sec, anim, result, local,
-                        bestBegin, bestCount, gapStart, typedEnd);
+                        bestBegin, bestCount, gapStart, typedEnd, includeReport);
                 if (!decodedLayout && gapStart < typedEnd && gapStart >= 0)
                 {
                     int gap = typedEnd - gapStart;
@@ -848,7 +869,7 @@ namespace MusafirEx.XBX2Unity.Editor
         private static bool ProbeAnnotationAndPackedArrays(
             byte[] data, Section sec, ObjectRef anim, Result result,
             List<PointerRef> local, int firstIndex, int count,
-            int regionStart, int typedEnd)
+            int regionStart, int typedEnd, bool includeReport)
         {
             var lines = result.splineDiagnostics;
             PointerRef annotationArray = GetPointer(result, anim, 0x1C, false);
@@ -886,7 +907,7 @@ namespace MusafirEx.XBX2Unity.Editor
             lines.Add("  Verified hkaAnnotationTrack names: " + labels.Count +
                 " (NOT spline keyframes)");
             lines.Add("  Annotation index | label | track-to-bone index (side-by-side only):");
-            for (int i = 0; i < labels.Count; i++)
+            for (int i = 0; includeReport && i < labels.Count; i++)
                 lines.Add("    Annotation " + i.ToString("D3") +
                     " | " + labels[i] + " | binding bone=" +
                     result.motion.trackToBone[i]);
@@ -967,20 +988,24 @@ namespace MusafirEx.XBX2Unity.Editor
             Buffer.BlockCopy(data, rawAt, payload, 0, payload.Length);
             result.motion.annotationNames = labels.ToArray();
             result.motion.packedSplineData = payload;
-            using (SHA256 sha = SHA256.Create())
-                lines.Add("    m_data SHA256: " +
-                    BitConverter.ToString(sha.ComputeHash(payload))
-                        .Replace("-", "").ToLowerInvariant());
-            lines.Add("    First 64 payload bytes: " +
-                HexBytes(payload, 0, Math.Min(64, payload.Length)));
-            if (payload.Length > 64)
-                lines.Add("    Last 64 payload bytes: " +
-                    HexBytes(payload, payload.Length - 64, 64));
+            if (includeReport)
+                using (SHA256 sha = SHA256.Create())
+                    lines.Add("    m_data SHA256: " +
+                        BitConverter.ToString(sha.ComputeHash(payload))
+                            .Replace("-", "").ToLowerInvariant());
+            if (includeReport)
+            {
+                lines.Add("    First 64 payload bytes: " +
+                    HexBytes(payload, 0, Math.Min(64, payload.Length)));
+                if (payload.Length > 64)
+                    lines.Add("    Last 64 payload bytes: " +
+                        HexBytes(payload, payload.Length - 64, 64));
+            }
 
             // A small source stream may be reconstructed from a text audit,
             // preserving the exact input bytes for offline analysis. Larger
             // streams require original HKT upload instead of gigantic logs.
-            if (payload.Length <= 8192)
+            if (includeReport && payload.Length <= 8192)
             {
                 lines.Add("    BASE64 m_data " + payload.Length +
                     " bytes (raw, no transformations):");
@@ -990,7 +1015,7 @@ namespace MusafirEx.XBX2Unity.Editor
                         Math.Min(96, base64.Length - offset)));
                 lines.Add("    END BASE64 m_data");
             }
-            else
+            else if (includeReport)
                 lines.Add("    m_data >8KiB: full bytes omitted; upload original HKT.");
             return true;
         }
