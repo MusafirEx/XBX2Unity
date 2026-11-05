@@ -387,7 +387,7 @@ def fixture_native_hkt_sar_asset_import_contract():
         'public sealed class XBXSkellSarAssetImporter',
         'ctx.AddObjectToAsset("main", clip);',
         'ctx.SetMainObject(clip);',
-        'ctx.AddObjectToAsset("motion_" + entry.index.ToString("D4"), clip);',
+        '"motion_" + entry.index.ToString("D4"), clip);',
         'ctx.SetMainObject(manifest);',
         'XBXSkellHktMotionAudit.ExtractNativeSpline(hkt, name)',
         'XBXSkellSarAnimationAudit.Read(ctx.assetPath)',
@@ -502,7 +502,7 @@ def fixture_compatible_skell_animation_sharing():
         "VariantName(",
         'ctx.AddObjectToAsset("compatible_" +',
         'ctx.AddObjectToAsset("main", clip);',
-        'ctx.AddObjectToAsset("motion_" + entry.index.ToString("D4"), clip);',
+        '"motion_" + entry.index.ToString("D4"), clip);',
         '"motion_" + entry.index.ToString("D4") +',
         "importedCompatible++",
         "Total AnimationClip sub-assets:",
@@ -514,6 +514,55 @@ def fixture_compatible_skell_animation_sharing():
     assert "Compatible Skell" in README
     # Original stable source IDs are retained, variants derive GUIDs from
     # target CAMDOs so reorder of additional targets will not break references.
+
+
+def fixture_dl100100_mixed_sar_families():
+    """A valid mixed-family SAR must not fail entirely on missing primary rig.
+
+    Audit of the user's dl100100.sar: 444 in-bounds HKT entries, 438
+    single-block compressed streams and 6 unsupported multi-block streams.
+    Of the 438 single-block files, 431 use 104-track dl100100, 4 use
+    83-track dl019600 and 3 use 115-track dl049100.
+    """
+    families = {
+        "dl100100_Bone": (104, 431),
+        "dl019600_Bone": (83, 4),
+        "dl049100_Bone": (115, 3),
+    }
+    assert sum(n for tracks, n in families.values()) == 438
+    assert 438 + 6 == 444
+    # Even when no primary target is loaded, each family is still inspected.
+    source_rig_cache = {}
+    source_rig_errors = {}
+    for family, (tracks, count) in families.items():
+        if family == "dl100100_Bone":
+            source_rig_errors[family] = "matching CAMDO and sibling rig missing"
+        else:
+            source_rig_cache[family] = tracks
+    assert len(source_rig_cache) == 2 and len(source_rig_errors) == 1
+
+    for phrase in (
+        "PRIMARY CAMDO UNAVAILABLE:",
+        "Import continues per HKT entry.",
+        "sourceRigCache",
+        "sourceRigErrors",
+        "skeletonProfiles",
+        "XBXSkellHktMotionAudit.ExtractNativeSpline(",
+        "XBXSkellHktSplineDecoder.Decode(probe)",
+        "ctx, null, true, family",
+        "if (clip != null)",
+        "if (clip == null && autoFindSkellCamdo)",
+        "cannot bind AnimationClip:",
+        "HKT SOURCE SKELETON FAMILIES:",
+        "ZERO SAR clips for ",
+        "Matching rig",
+    ):
+        assert phrase in AUTOIMPORT, "Mixed-family SAR diagnostic contract missing: " + phrase
+
+    # The source HKT files, CAMDO, and rig must never be overwritten;
+    # no fake curves should be emitted for unresolved binding paths.
+    assert 'File.WriteAllBytes(' not in AUTOIMPORT
+    assert 'File.WriteAllText(' not in AUTOIMPORT
 
 
 def main():
@@ -539,6 +588,7 @@ def main():
     fixture_playback_diagnostics_contract()
     fixture_native_hkt_sar_asset_import_contract()
     fixture_compatible_skell_animation_sharing()
+    fixture_dl100100_mixed_sar_families()
     for item in (
         "hkPackfileHeader", "HktMagic", "MaxFiles = 4096",
         "MaxBatchBytes", "CountFixups", "__classnames__",
