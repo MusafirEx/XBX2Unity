@@ -484,7 +484,7 @@ def fixture_compatible_skell_animation_sharing():
 
     for phrase in (
         "bool allowCompatibleRootAlias = false",
-        "ValidateRig(motion, skeleton, prefab,",
+        "motion, skeleton, prefab, allowCompatibleRootAlias",
         "skeleton.bones.Count == motion.trackCount",
         "skeleton.bones[bone].parent == -1",
         "string.Equals(expected, motion.skeletonName,",
