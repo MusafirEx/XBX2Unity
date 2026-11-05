@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.2 - 2026-11-05 (SAR mixed-skeleton recovery and actionable 0-clip diagnostics)
+- Analyze real 7,348,224-byte `dl100100.sar`: valid SAR1 BE v0x101, 444 in-bounds Havok splines; 437 `dl100100_Bone` motions (104 tracks), four `dl019600_Bone` motions (83 tracks), three `dl049100_Bone` motions (115 tracks), of which six are unsupported multi-block.
+- Independently validate whole-payload parsing of **438** single-block HKT entries. A lack of Unity AnimationClips is thus not evidence of corrupt SAR. A valid skeleton/CAMDO target is still required for exact Transform paths.
+- Fix SAR importer early abort: missing, incompatible or unimported primary CAMDO no longer prevents inspection/import of other embedded HKT entries. Determine and cache matching rig/CAMDO **by each HKT's own skeleton name**, optionally fallback from an incompatible explicitly chosen primary to the matching imported source-family CAMDO.
+- Manifest explicitly records source skeleton families/track counts, missing-rig lookup errors, skipped entries and prominent zero-clip warnings, without fabricating incorrect AnimationClip curves or rewriting source data.
+- Retain original `motion_####` sub-asset IDs and compatible target variants, with regression contracts for mixed 83/104/115-bone archives, partial rig availability and no write/extraction.
+- Real Unity Editor compilation and clip playback remain to be tested by the user.
+
+
 ## 0.13.1 - 2026-11-05 (compatible Skell HKT/SAR animation sharing)
 - Binary compare the user's two actual CAMDOs: `dl099100` and `dl099110` are both 827,392 bytes (MXMD) and have **228 identical bone-name string occurrences with the same offsets**; root names differ (`dl099100_Bone` versus `dl099110_Bone`). Full skeleton hierarchy/bind pose equivalence is NOT asserted without the original `*_rig.hkt` files.
 - Fix imported animation root path mismatch by allowing only `dlXXXXXX_Bone` → `dlYYYYYY_Bone` root alias, while enforcing exact nonroot bone name and index matches, target transform path checks, 1:1 target skeleton size, and parent -1 on the root.

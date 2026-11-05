@@ -2,6 +2,31 @@
 
 Unity 2022.3+ Editor package for **CPK archive extraction** and inspection/external extraction of **CASM/CANV** map-file pairs. The package does not include third-party executables or game assets.
 
+## SAR v0.13.2 — mixed skeleton families and missing-rig diagnostics
+
+**Actual user file audit:** `dl100100.sar` is a valid original **SAR1 BE v0x101** archive, 7,348,224 bytes and 444 in-bounds Havok HKT files. All 444 use the spline-compressed animation class. The native 32-bit packfile headers report:
+
+| Embedded HKT skeleton | Tracks | Entries | Single-block | Multi-block |
+| --- | ---: | ---: | ---: | ---: |
+| `dl100100_Bone` | 104 | 437 | 431 | 6 |
+| `dl019600_Bone` | 83 | 4 | 4 | 0 |
+| `dl049100_Bone` | 115 | 3 | 3 | 0 |
+| **Total** | | **444** | **438** | **6** |
+
+An independent bounded byte-level decoder test consumed the **entire compressed spline data stream for each of the 438 single-block HKT files** with supported quantization/masks, no unexplained trailing bytes. This validates source layout, **not Unity Animator playback**. The remaining six animations have two compressed blocks and are correctly rejected until multi-block decoding is implemented.
+
+**Why zero AnimationClips?** Before v0.13.2, the SAR importer resolved **one CAMDO** (by `dl100100.sar` filename or explicit field) **before processing any HKT entry**. If that CAMDO or its matching `*_rig.hkt` was unavailable/unimported, the importer caught one outer exception and generated **zero clips** even though the SAR was valid. The importer cannot produce correct Unity Transform animation paths without a matching skeleton; it must never invent bone parents. Also, a 104-track `dl100100` motion cannot be assumed compatible with the 103-bone `dl099100` rig merely by changing the root name.
+
+**Fix:** The SAR importer now reports **PRIMARY CAMDO UNAVAILABLE**, continues inspecting each HKT entry, and caches per-entry CAMDO rig resolution by its **embedded original skeleton name** (e.g. `dl100100_Bone`, `dl019600_Bone`, `dl049100_Bone`). It can import supported entries for families whose CAMDO/rig is present, even when the archive's primary CAMDO is absent. Unsupported/mismatched entries are skipped independently and listed in a manifest with family, source track count and detailed error. If nothing can be bound, a prominent **ZERO SAR clips** diagnostic tells you why. Existing `motion_####` clip IDs, additional compatible-model variants and source assets remain unchanged.
+
+**To use `dl100100.sar`:**
+1. Import **`dl100100.camdo`** and its sibling **`dl100100_rig.hkt`** together in the Unity Project's `Assets/`. Enable *Import Skell HKT Hierarchy* on the CAMDO and Apply; enable bone weights if you need mesh deformation.
+2. Select `dl100100.sar` and set *Skell CAMDO* to the **imported `dl100100.camdo` GameObject asset**, or enable Auto-find matching CAMDO. The original archive alone is not a substitute for the target rig.
+3. For a fast test set **Animation Name Filter = `idle`** or **Max Clips = 1**, Apply and expand the SAR. You should get a real *imported* idle AnimationClip if bone-name/index/path checks all pass.
+4. If no clips appear, select the SAR's **`dl100100_Animations` manifest** sub-asset and inspect the **HKT SOURCE SKELETON FAMILIES** and **cannot bind AnimationClip** messages; the manifest distinguishes missing CAMDO, unsupported codec and mismatched joint mapping. You may import `dl019600` and `dl049100` CAMDO/rig pairs to use the seven foreign-family motions as well.
+
+The uploaded material for this diagnosis contains the SAR but **not a `dl100100.camdo` or `dl100100_rig.hkt` pair**; we cannot confirm the exact local Unity project’s asset setup or whether the 104 target bones will match without those files. CI validates source contracts/package build, not an actual Unity Editor import.
+
 ## Compatible Skell cross-model animation sharing (v0.13.1)
 
 **Verified source observation:** the user supplied native `dl099100.camdo` and `dl099110.camdo`. Both files are **827,392 bytes**, are MXMD, and contain **228 recognizably bone-name string entries, in identical names and byte offsets** (90 unique `EX_`/`JD_`/`JU_`/`TW_` names), while their distinct roots are **`dl099100_Bone`** versus **`dl099110_Bone`**. Their geometry differs substantially; equality of the full `*_rig.hkt` parent hierarchy and bind pose is **not yet independently proven** because those rig files were not uploaded.

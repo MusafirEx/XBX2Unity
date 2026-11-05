@@ -280,20 +280,43 @@ namespace MusafirEx.XBX2Unity.Editor
             summary.AppendLine("The original .sar is not extracted or modified.");
             int imported = 0, importedCompatible = 0, skipped = 0;
             var issues = new List<string>();
+            var skeletonProfiles = new Dictionary<string, int>(
+                StringComparer.Ordinal);
+            // Cache target lookup results by embedded HKT skeleton name, not
+            // only by SAR filename. Mixed-family archives (e.g. dl100100.sar)
+            // contain 83-, 104- and 115-bone motions.
+            var sourceRigCache = new Dictionary<string,
+                XBXSkellMotionImport.Target>(StringComparer.Ordinal);
+            var sourceRigErrors = new Dictionary<string, string>(
+                StringComparer.Ordinal);
             try
             {
                 XBXSkellSarAnimationAudit.Archive archive =
                     XBXSkellSarAnimationAudit.Read(ctx.assetPath);
                 summary.AppendLine("Validated SAR entries: " + archive.entries.Count);
-                // The source archive name is a Skell id like dl099100.
-                // Individual HKT annotations still undergo strict rig
-                // index/name verification before becoming Unity clips.
-                XBXSkellMotionImport.Target target =
-                    XBXSkellMotionImport.Resolve(ctx, skellCamdo,
-                        autoFindSkellCamdo, archiveName + "_Bone");
+                // An absent or incompatible CAMDO must NOT abort the entire
+                // archive. Decode and diagnose each native HKT independently,
+                // resolving its own recorded skeleton family when possible.
+                XBXSkellMotionImport.Target primary = null;
+                try
+                {
+                    primary = XBXSkellMotionImport.Resolve(
+                        ctx, skellCamdo, autoFindSkellCamdo,
+                        archiveName + "_Bone");
+                    summary.AppendLine("Primary CAMDO: " + primary.assetPath);
+                }
+                catch (Exception primaryError)
+                {
+                    summary.AppendLine("PRIMARY CAMDO UNAVAILABLE: " +
+                        primaryError.Message);
+                    summary.AppendLine(
+                        "Import continues per HKT entry. Assign the matching " +
+                        "CAMDO and sibling *_rig.hkt, or enable auto-find.");
+                }
                 List<XBXSkellMotionImport.Target> compatible =
                     XBXSkellMotionImport.ResolveVariants(
-                        ctx, compatibleSkellCamdos, target.assetPath);
+                        ctx, compatibleSkellCamdos,
+                        primary == null ? null : primary.assetPath);
                 summary.AppendLine("Additional compatible CAMDO targets: " +
                     compatible.Count);
 
@@ -330,25 +353,117 @@ namespace MusafirEx.XBX2Unity.Editor
                             XBXSkellMotionImport.SafeName(entryLabel);
                         var probe = XBXSkellHktMotionAudit.ExtractNativeSpline(
                             hkt, uniqueName);
-                        var poses = XBXSkellHktSplineDecoder.Decode(probe);
-                        AnimationClip clip = XBXSkellMotionImport.BuildForTarget(
-                            uniqueName, probe, poses, target, loopSeamlessIdle);
-                        // Original stable IDs remain UNCHANGED so existing
-                        // Animator references to source clips survive upgrade.
-                        ctx.AddObjectToAsset("motion_" + entry.index.ToString("D4"), clip);
-                        imported++;
+                        string family = string.IsNullOrEmpty(probe.skeletonName)
+                            ? "(unknown)" : probe.skeletonName;
+                        string profile = family + " (" + probe.trackCount +
+                            " tracks)";
+                        int previous;
+                        skeletonProfiles.TryGetValue(profile, out previous);
+                        skeletonProfiles[profile] = previous + 1;
 
-                        // Reuse decoded spline poses, no second HKT parse or
-                        // decompression for each compatible target.
+                        // Single-block spline decoding needs no target rig.
+                        // This separates codec failures from missing CAMDOs.
+                        var poses = XBXSkellHktSplineDecoder.Decode(probe);
+                        AnimationClip clip = null;
+                        string primaryFailure = null;
+                        XBXSkellMotionImport.Target chosenTarget = null;
+                        if (primary != null)
+                        {
+                            try
+                            {
+                                clip = XBXSkellMotionImport.BuildForTarget(
+                                    uniqueName, probe, poses, primary,
+                                    loopSeamlessIdle);
+                                chosenTarget = primary;
+                            }
+                            catch (Exception mismatchedRig)
+                            {
+                                primaryFailure = mismatchedRig.Message;
+                            }
+                        }
+
+                        // Foreign rig families within one SAR require their
+                        // own compatible CAMDO. Match by HKT skeleton name.
+                        if (clip == null && autoFindSkellCamdo)
+                        {
+                            XBXSkellMotionImport.Target sourceTarget;
+                            if (!sourceRigCache.TryGetValue(family, out sourceTarget) &&
+                                !sourceRigErrors.ContainsKey(family))
+                            {
+                                try
+                                {
+                                    sourceTarget = XBXSkellMotionImport.Resolve(
+                                        ctx, null, true, family);
+                                    sourceRigCache[family] = sourceTarget;
+                                }
+                                catch (Exception lookupError)
+                                {
+                                    sourceRigErrors[family] = lookupError.Message;
+                                }
+                            }
+                            if (sourceRigCache.TryGetValue(family, out sourceTarget) &&
+                                (primary == null ||
+                                 !string.Equals(sourceTarget.assetPath,
+                                     primary.assetPath,
+                                     StringComparison.OrdinalIgnoreCase)))
+                            {
+                                try
+                                {
+                                    clip = XBXSkellMotionImport.BuildForTarget(
+                                        uniqueName, probe, poses, sourceTarget,
+                                        loopSeamlessIdle);
+                                    chosenTarget = sourceTarget;
+                                }
+                                catch (Exception sourceError)
+                                {
+                                    sourceRigErrors[family] = sourceError.Message;
+                                }
+                            }
+                        }
+
+                        // Preserve original source IDs for successfully bound
+                        // clips. If no verified rig exists, do NOT fabricate
+                        // curves using guessed bone-parent paths.
+                        if (clip != null)
+                        {
+                            ctx.AddObjectToAsset(
+                                "motion_" + entry.index.ToString("D4"), clip);
+                            imported++;
+                        }
+                        else
+                        {
+                            skipped++;
+                            string reason = primaryFailure ??
+                                "No matching CAMDO/rig hierarchy available";
+                            string lookupError;
+                            if (sourceRigErrors.TryGetValue(family,
+                                out lookupError))
+                                reason += " | auto-find: " + lookupError;
+                            issues.Add("entry " + entry.index + " [" +
+                                entry.name + "] (" + profile +
+                                "): cannot bind AnimationClip: " + reason +
+                                ". Expected matching " + family +
+                                " CAMDO and *_rig.hkt in Assets.");
+                        }
+
+                        // Compatible Skell variants are independent of the
+                        // primary rig. A valid compatible target can still
+                        // import a usable clip when the primary is absent.
                         foreach (XBXSkellMotionImport.Target alternate in compatible)
                         {
+                            if (chosenTarget != null &&
+                                string.Equals(alternate.assetPath,
+                                    chosenTarget.assetPath,
+                                    StringComparison.OrdinalIgnoreCase))
+                                continue;
                             try
                             {
                                 AnimationClip variant =
                                     XBXSkellMotionImport.BuildForTarget(
                                         XBXSkellMotionImport.VariantName(
                                             uniqueName, alternate),
-                                        probe, poses, alternate, loopSeamlessIdle);
+                                        probe, poses, alternate,
+                                        loopSeamlessIdle);
                                 ctx.AddObjectToAsset(
                                     "motion_" + entry.index.ToString("D4") +
                                     "__" + XBXSkellMotionImport.TargetGuid(alternate),
@@ -370,17 +485,35 @@ namespace MusafirEx.XBX2Unity.Editor
                             "]: " + entryError.Message);
                     }
                 }
+                summary.AppendLine("HKT SOURCE SKELETON FAMILIES:");
+                foreach (KeyValuePair<string, int> family in skeletonProfiles)
+                    summary.AppendLine("  " + family.Key + ": " +
+                        family.Value + " parsed single-block entries");
                 summary.AppendLine("Imported source AnimationClip sub-assets: " + imported);
                 summary.AppendLine("Imported compatible Skell AnimationClip variants: " +
                     importedCompatible);
                 summary.AppendLine("Total AnimationClip sub-assets: " +
                     (imported + importedCompatible));
                 summary.AppendLine("Filtered / skipped / unsupported original entries: " + skipped);
-                summary.AppendLine("Matching rig: " + target.assetPath);
+                summary.AppendLine("Matching rig (primary): " +
+                    (primary == null ? "(none; see per-skeleton lookup errors)" :
+                        primary.assetPath));
+                foreach (KeyValuePair<string, XBXSkellMotionImport.Target>
+                    match in sourceRigCache)
+                    summary.AppendLine("Auto-resolved " + match.Key + " -> " +
+                        match.Value.assetPath);
                 if (issues.Count > 0)
-                    ctx.LogImportWarning("SAR " + archiveName + ": " + imported +
+                    ctx.LogImportWarning("SAR " + archiveName + ": " +
+                        (imported + importedCompatible) +
                         " clips imported; " + issues.Count +
-                        " entries unsupported. Expand SAR manifest for details.");
+                        " binding/codec issues. Expand the SAR manifest. " +
+                        "A valid SAR alone is not enough: each AnimationClip " +
+                        "requires a matching imported CAMDO and *_rig.hkt.");
+                if (imported + importedCompatible == 0)
+                    ctx.LogImportWarning("[XBX2Unity] ZERO SAR clips for " +
+                        archiveName + " despite " + archive.entries.Count +
+                        " valid SAR entries. Check Skell CAMDO / sibling rig " +
+                        "and review per-skeleton diagnostics in manifest.");
             }
             catch (Exception ex)
             {
