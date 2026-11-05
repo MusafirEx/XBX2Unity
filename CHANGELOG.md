@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.1 - 2026-11-05 (compact Skell .anim curves + seamless idle looping)
+- Independently audit the user's real generated `0000_000000_idle_anm_native.anim` (20,683,697 bytes) against the original 11,200-byte HKT and the 444-entry `dl099100.sar`: the HKT appears byte-for-byte in the SAR, all 103 annotation names match exported clip paths, and all 309 quaternion/position/scale curves contain 201 ordered samples. The original file contains no invalid values or quaternion sign discontinuities; only 13 quaternion groups and one position group vary over time.
+- Fix exporter bloat: preserve all dynamic samples, but replace redundant static **whole-vector/quaternion groups** with two identical endpoint samples. On the submitted idle clip this reduces 62,109 serialized keyframes to 3,404 (295 static groups, 14 dynamic groups). A directly transformed YAML fixture shrank 20.68 MB to 1.59 MB (**92.33% smaller**) with all original dynamic curve values and timestamps preserved.
+- Enable Unity's `AnimationClipSettings.loopTime` only for an explicit `idle`-named motion whose first and last decoded per-bone position/scale/quaternion poses agree within strict tolerances. Other animations remain non-loop by default.
+- Keep the exact HKT motion decoder, track-to-bone mapping, original CAMDO, rig and material assets unchanged.
+- GitHub CI covers synthetic compression/loop contracts and package build; actual Unity Editor .anim compilation and visual playback still require validation.
+
+
 ## 0.12.0 - 2026-11-04 (native HKT spline AnimationClip exporter)
 - Independently reconstruct the original Wii U idle motion compressed `m_data` (2416 bytes; SHA-256 `720c4647a07950042e2cab571614603540d2c01053be713d57319e959635bd30`) from the user's uploaded Phase 2E report. Confirm exact end-to-end parsing of 103 transform tracks and repeated idle pose samples, with 13 dynamic quaternion tracks and one dynamic translation track.
 - Implement a bounded decoder for single-block Havok 2013 native 32-bit spline-compressed animation: 4-byte track masks, static or dynamic quantized translation/scale, little-endian spline knots, 40-bit compressed quaternion reconstruction and de Boor interpolation.
