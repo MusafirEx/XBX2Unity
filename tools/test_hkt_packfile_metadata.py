@@ -16,6 +16,7 @@ BUILDER = (ROOT / "tools/build_unitypackage.py").read_text(encoding="utf-8")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 DECODER = (ROOT / "Editor/XBXSkellHktSplineDecoder.cs").read_text(encoding="utf-8")
 EXPORTER = (ROOT / "Editor/XBXSkellHktClipExporter.cs").read_text(encoding="utf-8")
+DIAGNOSTIC = (ROOT / "Editor/XBXSkellAnimationBindingDiagnostics.cs").read_text(encoding="utf-8")
 MAGIC = b"\x57\xe0\xe0\x57\x10\xc0\xc0\x10"
 CLASSES = ("hkRootLevelContainer", "hkaSplineCompressedAnimation",
            "hkaAnimationBinding", "hkaAnimationContainer")
@@ -329,6 +330,47 @@ def fixture_compact_native_curve_contract():
     ):
         assert token in EXPORTER, "Compact curve/idle loop contract missing: " + token
 
+def fixture_playback_diagnostics_contract():
+    """Root binding/renderer diagnostic source contracts, no Unity runtime."""
+    # Unity curves are relative to Animator root. Prefix is valid at the
+    # CAMDO model root; attaching Animator one level deeper mismatches.
+    expected = "Skell_Rig/dl099100_Bone/JD_hip"
+    root_children = ("Skell_Rig", "model_000")
+    rig_children = ("dl099100_Bone",)
+    assert expected.split("/")[0] in root_children
+    assert expected.split("/")[0] not in rig_children
+    # Same paths in submitted idle and park; empty genericBindings in park
+    # is suspicious but cannot establish the playback root by itself.
+    assert expected.endswith("/JD_hip")
+
+    for phrase in (
+        "class XBXSkellAnimationBindingDiagnostics",
+        "AnimationUtility.GetCurveBindings(clip)",
+        "root.transform.Find(path)",
+        "Animator on model root:",
+        "runtimeAnimatorController",
+        "SkinnedMeshRenderer count:",
+        "MeshRenderer count:",
+        "mesh vertex weights=",
+        "importSkellBoneWeights" if False else "Import Skell Bone Weights",
+        "AnimationMode.SampleAnimationClip(modelRoot, motion,",
+        "AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate)",
+        "Skell_Rig direct child:",
+    ):
+        assert phrase in DIAGNOSTIC, "Skell diagnosis source contract missing: " + phrase
+    for phrase in (
+        "SkinnedMeshRenderer",
+        "AssetDatabase.ImportAsset(targetPath, ImportAssetOptions.ForceUpdate)",
+        "AnimationUtility.GetCurveBindings(persistedClip)",
+        "persistedClip.frameRate",
+        "zero" if False else "ZERO SkinnedMeshRenderer",
+    ):
+        assert phrase in EXPORTER, "HKT exporter feedback missing: " + phrase
+    assert "XBXSkellAnimationBindingDiagnostics.Open()" in INSPECTOR
+    assert "XBXSkellAnimationBindingDiagnostics.cs" in BUILDER
+    assert "XBXSkellAnimationBindingDiagnostics.cs.meta" in BUILDER
+
+
 def main():
     for big in (True, False):
         for stride, first_field in ((48, 16), (48, 20), (64, 20)):
@@ -349,6 +391,7 @@ def main():
     fixture_phase2e_ann_and_packed_data()
     fixture_native_spline_decoder_contract()
     fixture_compact_native_curve_contract()
+    fixture_playback_diagnostics_contract()
     for item in (
         "hkPackfileHeader", "HktMagic", "MaxFiles = 4096",
         "MaxBatchBytes", "CountFixups", "__classnames__",
@@ -377,7 +420,7 @@ def main():
     assert "Editor/XBXSkellHktMotionAudit.cs" in BUILDER
     assert "Editor/XBXSkellHktMotionAudit.cs.meta" in BUILDER
     assert "HKT" in README and "AnimationClip" in README
-    print("Synthetic HKT metadata, spline decoding, compact static curves, verified seamless idle loop and package contracts OK")
+    print("Synthetic HKT spline and compact curves; Skell playback hierarchy/skinning diagnostic source contracts OK")
 
 
 if __name__ == "__main__":
