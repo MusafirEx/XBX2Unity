@@ -495,7 +495,13 @@ namespace MusafirEx.XBX2Unity.Editor
                 summary.AppendLine("Total AnimationClip sub-assets: " +
                     (imported + importedCompatible));
                 summary.AppendLine("Filtered / skipped / unsupported original entries: " + skipped);
-                summary.AppendLine("Matching rig: " + target.assetPath);
+                summary.AppendLine("Matching rig (primary): " +
+                    (primary == null ? "(none; see per-skeleton lookup errors)" :
+                        primary.assetPath));
+                foreach (KeyValuePair<string, XBXSkellMotionImport.Target>
+                    match in sourceRigCache)
+                    summary.AppendLine("Auto-resolved " + match.Key + " -> " +
+                        match.Value.assetPath);
                 if (issues.Count > 0)
                     ctx.LogImportWarning("SAR " + archiveName + ": " +
                         (imported + importedCompatible) +
