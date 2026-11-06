@@ -64,9 +64,17 @@ namespace MusafirEx.XBX2Unity.Editor
         public Color skellPaintColor2 = Color.white;
         public Color skellPaintColor3 = Color.white;
         public Color skellPaintColor4 = Color.white;
-        [Range(0, 13)] public int skellLayerDebugView = 0;
+        [Range(0, 15)] public int skellLayerDebugView = 0;
 
-        [Header("Observed Skell RGB Channels - dl099110")]
+        [Header("Observed Skell RGB Channels - R Metallic / G Body / B Glow")]
+        [Tooltip("User-confirmed: the _RGB Red channel controls metallic regions. " +
+                 "Opt-in view-dependent metallic preview on generated materials only.")]
+        public bool skellUseObservedRedMetallic = false;
+        [Range(0f, 1f)] public float skellMetallicStrength = 1f;
+        [Range(0.1f, 8f)] public float skellMetallicMaskGain = 1f;
+        [Tooltip("Smoothness is adjustable: the original roughness channel is not yet verified.")]
+        [Range(0f, 1f)] public float skellMetallicSmoothness = 0.6f;
+        [Range(0f, 2f)] public float skellMetallicHighlightStrength = 1f;
         [Tooltip("Observed in the game on dl099110: the _RGB Green channel marks the body. Tint only the generated layer preview, no external .mat changes.")]
         public bool skellUseObservedGreenBody = false;
         public Color skellBodyColor = Color.white;
@@ -544,9 +552,21 @@ namespace MusafirEx.XBX2Unity.Editor
                                         if (mat.HasProperty("_UsePaintMask"))
                                             mat.SetFloat("_UsePaintMask", hasCandidate &&
                                                 skellUseRgbCompanionAsPaintMask ? 1f : 0f);
-                                        // On dl099110 the source _RGB G marks body, B
-                                        // marks glow. Not globally proven for all Skells.
-                                        // Keep preview opt-in and never edit external .mat.
+                                        // User-observed _RGB roles: R metallic, G body,
+                                        // B glow. Apply only to GENERATED preview mats.
+                                        // External .mat overrides are never changed.
+                                        if (mat.HasProperty("_UseObservedRedMetallic"))
+                                            mat.SetFloat("_UseObservedRedMetallic",
+                                                hasCandidate && skellUseObservedRedMetallic ? 1f : 0f);
+                                        if (mat.HasProperty("_MetallicStrength"))
+                                            mat.SetFloat("_MetallicStrength", skellMetallicStrength);
+                                        if (mat.HasProperty("_MetallicMaskGain"))
+                                            mat.SetFloat("_MetallicMaskGain", skellMetallicMaskGain);
+                                        if (mat.HasProperty("_MetallicSmoothness"))
+                                            mat.SetFloat("_MetallicSmoothness", skellMetallicSmoothness);
+                                        if (mat.HasProperty("_MetallicHighlightStrength"))
+                                            mat.SetFloat("_MetallicHighlightStrength",
+                                                skellMetallicHighlightStrength);
                                         if (mat.HasProperty("_UseObservedGreenBody"))
                                             mat.SetFloat("_UseObservedGreenBody",
                                                 hasCandidate && skellUseObservedGreenBody ? 1f : 0f);
