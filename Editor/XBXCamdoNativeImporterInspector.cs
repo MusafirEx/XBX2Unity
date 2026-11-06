@@ -213,64 +213,72 @@ namespace MusafirEx.XBX2Unity.Editor
                     view.intValue = EditorGUILayout.Popup("Layer Debug View",
                         view.intValue, new[] { "Composite", "Raw Base Color",
                             "BC5 Normal Candidate", "SPM Specular Candidate",
-                            "RGB Companion - Color",
-                            "Selected RGB Channel - Grayscale",
-                            "Selected RGB Channel - Threshold at 50%",
+                            "RGBA Companion - Raw RGB",
+                            "Selected RGBA Channel - Grayscale",
+                            "Selected RGBA Channel - Threshold at 50%",
                             "Original Mesh Vertex Colors",
                             "RGB Companion - Normalized Channel Dominance",
                             "Base versus RGB Companion - Difference",
-                            "BC1 Companion Alpha - Binary View",
-                            "Observed Green - Body Mask (dl099110)",
-                            "Observed Blue - Glow Mask (dl099110)",
-                            "Observed Body/Glow - Green and Blue Overlay",
-                            "Observed Red - Metallic Mask (dl099110)",
-                            "Observed RGB - R Metallic / G Body / B Glow" });
+                            "BC1 Companion Alpha - Raw",
+                            "Green - Metallic Mask",
+                            "Blue - Glow Mask",
+                            "Green / Blue Overlay",
+                            "Red - Bump Height Mask",
+                            "RGBA Companion - Packed RGB",
+                            "Alpha - Color Tint Mask",
+                            "Red - Perturbed World Normal Preview" });
                     if (view.intValue == 5 || view.intValue == 6)
                     {
                         var ch = serializedObject.FindProperty("skellMaskChannel");
-                        ch.intValue = EditorGUILayout.Popup("RGB Channel To Inspect",
-                            ch.intValue, new[] { "Red", "Green", "Blue", "Alpha (BC1 binary)" });
+                        ch.intValue = EditorGUILayout.Popup("RGBA Channel To Inspect",
+                            ch.intValue, new[] { "Red (Bump)", "Green (Metallic)",
+                                "Blue (Glow)", "Alpha (Color Mask)" });
                     }
                     EditorGUILayout.HelpBox(
-                        "Channel views are read-only. They work without enabling Interpret " +
-                        "_RGB as Paint Mask. BC1 alpha has only 0/255 values and may be " +
-                        "fully opaque; it is not a fourth independent grayscale mask.",
+                        "Source mapping selected: Red = height/bump, Green = metallic, " +
+                        "Blue = glow, Alpha = color tint mask. The BC1 companion " +
+                        "may store only 1-bit Alpha (or an always-opaque Alpha): " +
+                        "the color mask may therefore be binary or full-surface. " +
+                        "Alpha is NOT a standalone RGB color. Source mask debug " +
+                        "views work even when effects are disabled.",
                         MessageType.Info);
                     EditorGUILayout.Space(6);
-                    EditorGUILayout.LabelField("Observed _RGB Channel Roles (Skell)",
+                    EditorGUILayout.LabelField("Skell RGBA Channel Roles",
                         EditorStyles.boldLabel);
-                    EditorGUILayout.HelpBox(
-                        "User-confirmed _RGB channels: Red = Metallic, Green = Body Color, " +
-                        "Blue = Glow. Preview effects are independent and opt-in; " +
-                        "the metallic response approximates surface reflection, " +
-                        "not the original game BRDF. Alpha/roughness remain unverified.",
-                        MessageType.Info);
                     EditorGUILayout.PropertyField(
-                        serializedObject.FindProperty("skellUseObservedRedMetallic"),
-                        new GUIContent("Red -> Metallic Surface Preview"));
-                    if (serializedObject.FindProperty("skellUseObservedRedMetallic").boolValue)
+                        serializedObject.FindProperty("skellUseObservedRedBump"),
+                        new GUIContent("Red -> Bump / Height"));
+                    if (serializedObject.FindProperty("skellUseObservedRedBump").boolValue)
+                    {
+                        EditorGUILayout.PropertyField(
+                            serializedObject.FindProperty("skellRedBumpStrength"),
+                            new GUIContent("Bump Strength"));
+                        EditorGUILayout.PropertyField(
+                            serializedObject.FindProperty("skellRedBumpMaskGain"),
+                            new GUIContent("Red Height Gain"));
+                        EditorGUILayout.HelpBox(
+                            "Single-channel Red perturbs the shading normal from " +
+                            "a height gradient; it is not a tangent-space XYZ " +
+                            "normal map and does not displace vertices.",
+                            MessageType.None);
+                    }
+                    EditorGUILayout.PropertyField(
+                        serializedObject.FindProperty("skellUseObservedGreenMetallic"),
+                        new GUIContent("Green -> Metallic Surface Preview"));
+                    if (serializedObject.FindProperty("skellUseObservedGreenMetallic").boolValue)
                     {
                         EditorGUILayout.PropertyField(
                             serializedObject.FindProperty("skellMetallicStrength"),
                             new GUIContent("Metallic Strength"));
                         EditorGUILayout.PropertyField(
                             serializedObject.FindProperty("skellMetallicMaskGain"),
-                            new GUIContent("Red Mask Gain"));
+                            new GUIContent("Green Metallic Gain"));
                         EditorGUILayout.PropertyField(
                             serializedObject.FindProperty("skellMetallicSmoothness"),
                             new GUIContent("Metal Smoothness (Estimated)"));
                         EditorGUILayout.PropertyField(
                             serializedObject.FindProperty("skellMetallicHighlightStrength"),
                             new GUIContent("Metal Highlight Strength"));
-                    }
-                    EditorGUILayout.PropertyField(
-                        serializedObject.FindProperty("skellUseObservedGreenBody"),
-                        new GUIContent("Green -> Body Color Tint"));
-                    if (serializedObject.FindProperty("skellUseObservedGreenBody").boolValue)
-                    {
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellBodyColor"));
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellBodyStrength"));
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("skellBodyMaskGain"));
                     }
                     EditorGUILayout.PropertyField(
                         serializedObject.FindProperty("skellUseObservedBlueGlow"),
@@ -281,18 +289,33 @@ namespace MusafirEx.XBX2Unity.Editor
                         EditorGUILayout.PropertyField(serializedObject.FindProperty("skellGlowIntensity"));
                         EditorGUILayout.PropertyField(serializedObject.FindProperty("skellGlowMaskGain"));
                         EditorGUILayout.HelpBox(
-                            "Blue glow is an additive unlit preview. True emissive lighting / bloom " +
-                            "requires compatible HDR rendering and post-processing.",
+                            "Blue glow remains an additive preview; HDR emission and " +
+                            "postprocessing bloom are separate rendering features.",
                             MessageType.Info);
+                    }
+                    EditorGUILayout.PropertyField(
+                        serializedObject.FindProperty("skellUseObservedAlphaColor"),
+                        new GUIContent("Alpha -> Custom Color Mask"));
+                    if (serializedObject.FindProperty("skellUseObservedAlphaColor").boolValue)
+                    {
+                        EditorGUILayout.PropertyField(
+                            serializedObject.FindProperty("skellAlphaTintColor"),
+                            new GUIContent("Custom Color"));
+                        EditorGUILayout.PropertyField(
+                            serializedObject.FindProperty("skellAlphaColorStrength"),
+                            new GUIContent("Color Tint Strength"));
+                        EditorGUILayout.PropertyField(
+                            serializedObject.FindProperty("skellAlphaMaskGain"),
+                            new GUIContent("Alpha Mask Gain"));
                     }
                     EditorGUILayout.Space(5);
                     EditorGUILayout.LabelField("Legacy Unverified RGBA Experiment",
                         EditorStyles.boldLabel);
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("skellUseRgbCompanionAsPaintMask"),
                         new GUIContent("Interpret _RGB as Paint Mask (Unverified)",
-                            "OFF by default. Superseded by Red=Metallic, Green=Body, " +
-                            "Blue=Glow. Legacy four-zone effect is bypassed " +
-                            "when any observed role is enabled."));
+                            "OFF by default. Superseded by R=Bump, G=Metallic, " +
+                            "B=Glow and A=Color. Legacy four-zone effect is " +
+                            "bypassed if any new channel role is enabled."));
                     if (serializedObject.FindProperty("skellUseRgbCompanionAsPaintMask").boolValue)
                     {
                         EditorGUILayout.PropertyField(serializedObject.FindProperty("skellPaintStrength"));
@@ -305,8 +328,9 @@ namespace MusafirEx.XBX2Unity.Editor
                 EditorGUILayout.HelpBox(
                     "Role candidates use MXMD texture IDs and source names, not guessed " +
                     "textures from another Skell. RFM/REF and glow roles are reported " +
-                    "but not assigned as specular/albedo. _RGB R metallic, G body and B glow " +
-                    "are opt-in on generated preview materials only. Paint interpretation is " +
+                    "but not assigned as specular/albedo. RGBA R bump, G metallic, " +
+                    "B glow and A color tint are opt-in on generated preview " +
+                    "materials only. Paint interpretation is " +
                     "an explicit experiment, OFF by default. Existing external .mat " +
                     "overrides always take precedence; the importer does not overwrite them. " +
                     "Use generated material previews to test new source bindings.",
