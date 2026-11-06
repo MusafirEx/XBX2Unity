@@ -47,16 +47,22 @@ def main():
     assert 'mat.SetTexture("_MainTex", selected.texture);' in importer
     assert 'renderer.sharedMaterial = overrideMaterial;' in importer
 
-    # A linear _RGB mask carries three independent observed roles; the shader
-    # must not treat red as gamma-corrected color or alpha as smoothness.
-    assert "maskCandidate.r * _MetallicMaskGain" in shader
-    assert "maskCandidate.g * _BodyMaskGain" in shader
+    # The packed companion uses four independent data roles. BC1 is a
+    # linear texture to preserve red heights, green metal coverage, blue
+    # emission and alpha mask exactly; alpha precision may be only 1-bit.
+    assert "maskCandidate.r * _BumpMaskGain" in shader
+    assert "maskCandidate.g * _MetallicMaskGain" in shader
     assert "maskCandidate.b * _GlowMaskGain" in shader
+    assert "maskCandidate.a * _AlphaMaskGain" in shader
+    assert "NormalFromRedHeight" in shader
     assert "metalCoverage * saturate(_MetallicStrength)" in shader
     assert "_MetallicSmoothness" in shader
+    assert "_UseObservedRedBump < 0.5" in shader
+    assert "_UseObservedGreenMetallic < 0.5" in shader
+    assert "_UseObservedAlphaColor < 0.5" in shader
     assert "maskCandidate.a * _Metallic" not in shader
-    assert "_UseObservedRedMetallic < 0.5" in shader
-    print("Linear _RGB mask data and opt-in R metallic/G body/B glow contract passed.")
+    print("Linear _RGB companion with R bump / G metallic / B glow / A color mask passed.")
+
 
 
 if __name__ == "__main__":
