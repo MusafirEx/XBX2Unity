@@ -1,8 +1,9 @@
 // Conservative MXMD MTXT semantic role discovery for Skell materials.
 // Role names inferred from actual source names in dl019100/dl019600/dl109100.
-// _RGB is a COMPANION mask (user-observed: R=metallic, G=body, B=glow).
-// It is NOT proven as a diffuse/albedo image or a 4-zone RGBA paint mask.
-// Real channel semantics should still be confirmed per Skell/material family.
+// _RGB is a companion texture with user-requested channel mapping:
+// R=height bump, G=metallic, B=glow, A=custom color/tint coverage.
+// A single scalar red/alpha channel is NOT an XYZ normal or an RGB color.
+// Verify the Alpha bit depth per BC1 source (often just 1-bit/opaque).
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
@@ -49,7 +50,7 @@ namespace MusafirEx.XBX2Unity.Editor
             if (IsRole(record, Role.Reflection)) return "Reflection candidate (RFM/REF)";
             if (IsRole(record, Role.Glow)) return "Glow candidate (GLO/GLW)";
             if (IsRole(record, Role.RgbCompanion))
-                return "RGB companion mask (R metallic / G body / B glow, observed)";
+                return "RGBA companion mask (R bump / G metallic / B glow / A color, configured)";
             return record.ColorScore >= 0 ? "Color / diffuse candidate" : "Unclassified source data";
         }
 
