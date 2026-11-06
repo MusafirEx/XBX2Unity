@@ -47,11 +47,16 @@ def main():
     assert 'mat.SetTexture("_MainTex", selected.texture);' in importer
     assert 'renderer.sharedMaterial = overrideMaterial;' in importer
 
-    # Red stays unassigned; source G and B are still opt-in user observations.
+    # A linear _RGB mask carries three independent observed roles; the shader
+    # must not treat red as gamma-corrected color or alpha as smoothness.
+    assert "maskCandidate.r * _MetallicMaskGain" in shader
     assert "maskCandidate.g * _BodyMaskGain" in shader
     assert "maskCandidate.b * _GlowMaskGain" in shader
-    assert "_UseObservedRed" not in shader
-    print("Linear _RGB mask subassets and opt-in G/B role contract passed.")
+    assert "metalCoverage * saturate(_MetallicStrength)" in shader
+    assert "_MetallicSmoothness" in shader
+    assert "maskCandidate.a * _Metallic" not in shader
+    assert "_UseObservedRedMetallic < 0.5" in shader
+    print("Linear _RGB mask data and opt-in R metallic/G body/B glow contract passed.")
 
 
 if __name__ == "__main__":

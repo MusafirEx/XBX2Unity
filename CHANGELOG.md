@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.3 - 2026-11-06 (source-observed Skell RGB red metallic mask)
+- User confirmed the source Skell `*_RGB` red channel represents **metallic coverage**; green remains body recoloring and blue remains glow. Alpha and game roughness/smoothness are still unidentified, and the historical four-zone RGBA paint hypothesis remains experimental.
+- Extend existing `XBX2Unity/Skell Layer Preview` shader with independent opt-in **Red Metallic Surface Preview** (`_UseObservedRedMetallic`, `_MetallicStrength`, `_MetallicMaskGain`, `_MetallicSmoothness`, `_MetallicHighlightStrength`). Decode red directly from the previously verified **linear BC1 _RGB companion mask**; metallic is proportional to red coverage (0=unchanged, 1=metal).
+- Use transformed vertex/world normals and camera direction for a **GGX-like highlight + Fresnel and illustrative environment gradient** in both Built-in and URP diagnostic passes. This demonstrates reflective metal surface appearance, but is **not full Unity Lit PBR**, native Xenoblade X BRDF, or accurate scene reflection-probe/lighting integration; smoothness is manually adjustable because its original texture channel is unknown.
+- Preserve green body color tint and blue emissive overlay **as independent channels**; body tint precedes red reflection, emission follows it. Obsolete RGBA four-color paint experiment is bypassed when *any* confirmed RGB role is enabled.
+- Add **two append-only debug views** (14=Red Metallic grayscale, 15=source R/G/B overlay), preserving prior modes 0–13; connect all new settings in CAMDO Material inspector/generation path, without mutating external `.mat` overrides or Skell HKT/rig/geometry.
+- Update linear-mask and observed-channel CI regression checks, README and source texture role description. Real Unity 2022 shader compilation and visual quality still need user-side validation.
+
+
 ## 0.13.2 - 2026-11-05 (SAR mixed-skeleton recovery and actionable 0-clip diagnostics)
 - Analyze real 7,348,224-byte `dl100100.sar`: valid SAR1 BE v0x101, 444 in-bounds Havok splines; 437 `dl100100_Bone` motions (104 tracks), four `dl019600_Bone` motions (83 tracks), three `dl049100_Bone` motions (115 tracks), of which six are unsupported multi-block.
 - Independently validate whole-payload parsing of **438** single-block HKT entries. A lack of Unity AnimationClips is thus not evidence of corrupt SAR. A valid skeleton/CAMDO target is still required for exact Transform paths.

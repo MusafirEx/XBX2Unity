@@ -2,6 +2,18 @@
 
 Unity 2022.3+ Editor package for **CPK archive extraction** and inspection/external extraction of **CASM/CANV** map-file pairs. The package does not include third-party executables or game assets.
 
+## Skell _RGB Red Metallic / Green Body / Blue Glow (v0.13.3)
+
+**New observed color-mask interpretation:** the user's latest comparison with the game identifies the third role of Skell `*_RGB` companion textures: **R = metallic surface coverage**, alongside the previously confirmed **G = customizable body tint mask** and **B = emission/glow mask**. The fourth BC1 alpha channel and original roughness/smoothness mapping remain unverified; do **not** repurpose alpha as smoothness.
+
+The existing `XBX2Unity/Skell Layer Preview` shader now supports independent opt-in Red metallic, Green body tint and Blue emission **using one linear-data _RGB companion texture**. Metallic coverage is evaluated as `saturate(mask.R * RedMaskGain) * MetallicStrength`. The Red response blends the base albedo into a **view-dependent Fresnel/GGX-like metallic reflection preview**, using imported world normals, an illustrative environment gradient and a fixed diagnostic key light. `Metallic Smoothness` (default 0.6) controls highlight width; `Metallic Highlight Strength` controls its intensity. These are tunable approximations, **not a reconstruction of the original Monolith Soft PBR/BRDF or real scene-light/reflection-probe integration**. Off = unchanged appearance.
+
+**Inspector path:** select the CAMDO > **Material** > enable **Import Skell MTXT Textures** and **Use Skell Layer Preview Shader** > expand **Observed _RGB Channel Roles** > enable **Red -> Metallic Surface Preview**. The effect defaults OFF to preserve previously generated materials. Optional adjustments: **Metallic Strength (0–1)**, **Red Mask Gain (0.1–8)**, **Metal Smoothness (Estimated, 0–1)** and **Metal Highlight Strength (0–2)**. Existing **Green -> Body Color Tint** and **Blue -> Glow Emission Preview** continue independently.
+
+**New Layer Debug View options (14 and 15):** `Observed Red - Metallic Mask` (grayscale source R) and `Observed RGB - R Metallic / G Body / B Glow` (source channel overlay). Existing debug modes 0–13 are unchanged; debug views work without enabling material effects. Source red is read from the dedicated `linearMaskTexture` BC1 channel, avoiding sRGB gamma correction. Green tint is evaluated before metallic, Blue emission after metallic, and the obsolete four-zone RGBA paint experiment is bypassed if **any** observed RGB role is enabled.
+
+The importer sets these controls **only on newly generated Skell Layer Preview materials**. Existing user-editable external `.mat` overrides, MXMD material assignments, CAMDO/rig geometry and source GX2 textures remain unchanged. External `.mat` overrides take precedence and must be configured manually to see the new preview. CI regression tests cover property wiring, opt-in defaults and G/B preservation; actual Unity 2022.3 shader compilation/visual quality must be checked in the user's Editor.
+
 ## SAR v0.13.2 — mixed skeleton families and missing-rig diagnostics
 
 **Actual user file audit:** `dl100100.sar` is a valid original **SAR1 BE v0x101** archive, 7,348,224 bytes and 444 in-bounds Havok HKT files. All 444 use the spline-compressed animation class. The native 32-bit packfile headers report:
@@ -243,27 +255,28 @@ The audit supports `SAR1` **big-endian** headers used on Wii U and `1RAS` **litt
 
 **Next validation:** inspect the `dl019600.sar` audit and one extracted `*_anm.hkt` binary, compare its class/track layout with the imported Skell skeleton, then implement the first real animation clip decoder. The existing HKT rig, skinned mesh and material mappings are deliberately unchanged.
 
-## Verified-in-game Skell companion roles for dl099110 (v0.9.3; linear-mask update v0.9.4)
+## Observed Skell companion roles for dl099110 (v0.9.3–v0.13.3)
 
-Direct visual comparison with the original game on `dl099110` established:
+The user's source/game comparisons have established:
+- **Red (R)** channel of source `*_RGB` = Skell **metallic part** mask (new v0.13.3).
 - **Green (G)** channel of source `*_RGB` = Skell **body part** mask.
 - **Blue (B)** channel of source `*_RGB` = Skell **glowing part** mask.
-- **Red (R)** remains **unknown**, no color rule applied.
-- Audit sampled BC1 alpha was consistently opaque; no verified alpha paint role.
+- Audit sampled BC1 alpha was consistently opaque; no verified alpha or smoothness role.
 
 The previous v0.9.1/0.9.2 experimental notion of four independent RGBA paint zones is now deprecated for `dl099110`. This observation is **specific to the tested Skell**, not a validated rule for every model or a full recreation of the original game shader.
 
 ### Material > Skell Layer Preview Shader
 
 The new controls are **independent and opt-in**:
+- **Red -> Metallic Surface Preview** (OFF). Adjust Metallic Strength, Red Mask Gain, Metal Smoothness (estimated), and Metal Highlight Strength. This is view-dependent preview reflection, not full scene-lighted PBR.
 - **Green -> Body Color Tint** (OFF). Set **Skell Body Color**, Body Strength (0–1) and Body Mask Gain (0.1–8) to recolor the mesh where companion Green is present. Default color is white, which leaves the existing base colors unchanged.
 - **Blue -> Glow Emission Preview** (OFF). Set **Skell Glow Color** (HDR capable), Glow Intensity (0–8) and Blue Mask Gain (0.1–8) to visualize where companion Blue emits light. This is additive color in an unlit preview shader, NOT automatically a real scene light or bloom; URP/Built-in postprocessing/HDR are separately required for proper glow.
-- **Layer Debug View** adds **Observed Green – Body Mask**, **Observed Blue – Glow Mask**, and **Observed Body/Glow – Green and Blue Overlay**. They show the unmodified source, even when effect toggles are OFF.
-- The **Legacy Unverified RGBA Experiment** is retained for comparison but is bypassed whenever observed Green/Blue role mapping is enabled. Do not use it to claim four confirmed paint zones.
+- **Layer Debug View** provides Green body, Blue glow and Green/Blue overlays plus **Observed Red – Metallic Mask** and **Observed RGB – R Metallic / G Body / B Glow**; these show the unmodified source even when effect toggles are OFF.
+- The **Legacy Unverified RGBA Experiment** is retained for comparison but is bypassed whenever any observed Red/Green/Blue role mapping is enabled. Do not use it to claim four confirmed paint zones.
 
-External `.mat` override assets are **never altered** by import settings. To test generated Layer Preview controls, temporarily clear the relevant material's external override and Apply/Reimport. To use the new effects on an existing editable external `.mat`, manually choose `XBX2Unity/Skell Layer Preview` as that material's shader, assign original source `*_RGB` to `_PaintMask`, and configure the material's exposed G/B channel controls; no automatic mutation of previously extracted material files occurs.
+External `.mat` override assets are **never altered** by import settings. To test generated Layer Preview controls, temporarily clear the relevant material's external override and Apply/Reimport. To use the new effects on an existing editable external `.mat`, manually choose `XBX2Unity/Skell Layer Preview` as that material's shader, assign original source `*_RGB` to `_PaintMask`, and configure its exposed R/G/B channel controls; no automatic mutation of previously extracted material files occurs.
 
-**Test:** `dl099110.camdo` > Material > Import Skell MTXT Textures On > Use Skell Layer Preview Shader On (keep other explicit shader override and old diagnostic shader OFF) > select observed G/B debug views > enable Green Body and adjust body tint > enable Blue Glow and adjust intensity. Report mismatch if G affects non-body areas or B illuminates non-glow regions. Original Skell shader and untested models may have different semantics.
+**Test:** `dl099110.camdo` > Material > Import Skell MTXT Textures On > Use Skell Layer Preview Shader On (keep other explicit shader override and old diagnostic shader OFF) > inspect R/G/B debug views > enable Red Metallic and adjust smoothness/strength > enable Green Body and adjust tint > enable Blue Glow and adjust emission. Report mismatch if R lights non-metallic parts, G affects non-body areas or B illuminates non-glow regions. Original Skell shader and untested models may have different semantics.
 
 **Verification limit:** CI checks source contracts and package creation, not compilation or visual fidelity in Unity 2022.3.
 
@@ -301,7 +314,7 @@ From live `dl019100`, `dl019600` and `dl109100` MXMD import logs, source name an
 - `*_SPM`: **BC1** specular candidate.
 - `*_RFM`, `*_REF`, `*_RF`: reflection candidate. Reported in manifest, never automatically bound to specular/albedo.
 - `*_GLO`, `*_GLW`: glow candidate. Reported only.
-- `*_RGB`: companion color/paint candidate. Its actual role, channel packing and Skell four-zone mask semantics **have not been established**; never assume source RGB is a native four-zone mask.
+- `*_RGB`: companion **R metallic / G body / B glow masks** (observed on tested Skell family). Do not use as default albedo; alpha and the old four-zone paint theory remain unverified. Other model families should be tested before assuming identical material semantics.
 
 ### New Material Inspector controls
 

@@ -222,7 +222,9 @@ namespace MusafirEx.XBX2Unity.Editor
                             "BC1 Companion Alpha - Binary View",
                             "Observed Green - Body Mask (dl099110)",
                             "Observed Blue - Glow Mask (dl099110)",
-                            "Observed Body/Glow - Green and Blue Overlay" });
+                            "Observed Body/Glow - Green and Blue Overlay",
+                            "Observed Red - Metallic Mask (dl099110)",
+                            "Observed RGB - R Metallic / G Body / B Glow" });
                     if (view.intValue == 5 || view.intValue == 6)
                     {
                         var ch = serializedObject.FindProperty("skellMaskChannel");
@@ -235,14 +237,32 @@ namespace MusafirEx.XBX2Unity.Editor
                         "fully opaque; it is not a fourth independent grayscale mask.",
                         MessageType.Info);
                     EditorGUILayout.Space(6);
-                    EditorGUILayout.LabelField("In-Game Observed Channel Roles (dl099110)",
+                    EditorGUILayout.LabelField("Observed _RGB Channel Roles (Skell)",
                         EditorStyles.boldLabel);
                     EditorGUILayout.HelpBox(
-                        "Observed against the game: _RGB Green marks the body and Blue " +
-                        "marks luminous parts on dl099110. Red remains unidentified. " +
-                        "These opt-in preview controls are NOT a reconstructed original " +
-                        "Skell lighting shader and are not assumed true for every model.",
+                        "User-confirmed _RGB channels: Red = Metallic, Green = Body Color, " +
+                        "Blue = Glow. Preview effects are independent and opt-in; " +
+                        "the metallic response approximates surface reflection, " +
+                        "not the original game BRDF. Alpha/roughness remain unverified.",
                         MessageType.Info);
+                    EditorGUILayout.PropertyField(
+                        serializedObject.FindProperty("skellUseObservedRedMetallic"),
+                        new GUIContent("Red -> Metallic Surface Preview"));
+                    if (serializedObject.FindProperty("skellUseObservedRedMetallic").boolValue)
+                    {
+                        EditorGUILayout.PropertyField(
+                            serializedObject.FindProperty("skellMetallicStrength"),
+                            new GUIContent("Metallic Strength"));
+                        EditorGUILayout.PropertyField(
+                            serializedObject.FindProperty("skellMetallicMaskGain"),
+                            new GUIContent("Red Mask Gain"));
+                        EditorGUILayout.PropertyField(
+                            serializedObject.FindProperty("skellMetallicSmoothness"),
+                            new GUIContent("Metal Smoothness (Estimated)"));
+                        EditorGUILayout.PropertyField(
+                            serializedObject.FindProperty("skellMetallicHighlightStrength"),
+                            new GUIContent("Metal Highlight Strength"));
+                    }
                     EditorGUILayout.PropertyField(
                         serializedObject.FindProperty("skellUseObservedGreenBody"),
                         new GUIContent("Green -> Body Color Tint"));
@@ -270,8 +290,9 @@ namespace MusafirEx.XBX2Unity.Editor
                         EditorStyles.boldLabel);
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("skellUseRgbCompanionAsPaintMask"),
                         new GUIContent("Interpret _RGB as Paint Mask (Unverified)",
-                            "OFF by default. Superseded by observed Green=Body, Blue=Glow " +
-                            "on dl099110. Legacy effect is bypassed when either observed role is enabled."));
+                            "OFF by default. Superseded by Red=Metallic, Green=Body, " +
+                            "Blue=Glow. Legacy four-zone effect is bypassed " +
+                            "when any observed role is enabled."));
                     if (serializedObject.FindProperty("skellUseRgbCompanionAsPaintMask").boolValue)
                     {
                         EditorGUILayout.PropertyField(serializedObject.FindProperty("skellPaintStrength"));
@@ -284,7 +305,8 @@ namespace MusafirEx.XBX2Unity.Editor
                 EditorGUILayout.HelpBox(
                     "Role candidates use MXMD texture IDs and source names, not guessed " +
                     "textures from another Skell. RFM/REF and glow roles are reported " +
-                    "but not assigned as specular/albedo. Paint mask interpretation is " +
+                    "but not assigned as specular/albedo. _RGB R metallic, G body and B glow " +
+                    "are opt-in on generated preview materials only. Paint interpretation is " +
                     "an explicit experiment, OFF by default. Existing external .mat " +
                     "overrides always take precedence; the importer does not overwrite them. " +
                     "Use generated material previews to test new source bindings.",
