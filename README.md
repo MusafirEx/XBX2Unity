@@ -2,7 +2,35 @@
 
 Unity 2022.3+ Editor package for **CPK archive extraction** and inspection/external extraction of **CASM/CANV** map-file pairs. The package does not include third-party executables or game assets.
 
-## Skell _RGB Red Metallic / Green Body / Blue Glow (v0.13.3)
+## Skell RGBA material remap — R Bump / G Metallic / B Glow / A Color (v0.13.4)
+
+**Current user-requested mapping** for Skell `*_RGB` companion texture (supersedes v0.13.3):
+
+| Channel | Use in the Skell Layer Preview shader | Important limitation |
+| --- | --- | --- |
+| **Red (R)** | **Height/Bump**: sampled height values perturb the shading normal via screen-space derivatives | One scalar channel is **not** an XYZ tangent-space normal map or mesh displacement |
+| **Green (G)** | **Metallic**: green mask coverage modulates the existing GGX-inspired/Fresnel preview | Smoothness is adjustable; original PBR/gloss encoding not confirmed |
+| **Blue (B)** | **Glow**: blue mask drives additive emissive color | Bloom needs an HDR/postprocessing pipeline |
+| **Alpha (A)** | **Color**: alpha selects coverage for a user-chosen **Custom Color tint** | Alpha is a scalar mask, **not the RGB color itself**; the original BC1 source may store only binary 0/1 alpha, or all pixels may be opaque |
+
+**Source interpretation:** The original *four-channel* companion can be decoded as a **linear DXT1/BC1 texture**. The separate `linearMaskTexture` must be used instead of the color/sRGB texture so midtone masks are not gamma-transformed. **BC1 alpha is only 1-bit when transparency is encoded** and many BC1 files are all opaque: when the alpha channel is all 1, turning on A Color tints the whole surface, not individual colored regions. This is a source-format limitation, not a shader bug. Inspect **Layer Debug View → Alpha - Color Tint Mask** before using it.
+
+### Importer controls (all opt-in, OFF by default)
+
+Select `*.camdo` > **Material** > turn ON **Import Skell MTXT Textures** and **Use Skell Layer Preview Shader**. Use the following new controls:
+
+- **Red → Bump / Height**; adjust Bump Strength (0–4) and Red Height Gain (0.1–8). The shader converts red height differences into normal perturbations using world-position derivatives; a fixed diagnostic light delta displays bump even without metallic. Independent native BC5 normal-map preview remains available.
+- **Green → Metallic Surface Preview**; adjust Metallic Strength (0–1), Green Metallic Gain (0.1–8), estimated Metal Smoothness (0–1) and Metal Highlight Strength (0–2). Reflection now reads **green**, not red; when red bump is enabled, the metallic highlight uses its perturbed normal.
+- **Blue → Glow Emission Preview**; choose Glow Color, Intensity and Blue Mask Gain as before. Blue remains unchanged.
+- **Alpha → Custom Color Mask**; choose Custom Color, Color Tint Strength (0–1) and Alpha Mask Gain (0.1–8). This applies the desired tint based on **alpha coverage**, not the previous green body mask.
+
+**Debug views:** Existing numeric modes 0–15 remain available with updated labels (11 = Green Metallic, 14 = Red Height); 16 = **Alpha Color Tint Mask** and 17 = **Red Perturbed World Normal Preview**. Mode 10 still displays raw BC1 alpha, while 16 applies mask gain. The raw RGB overlay mode does not display the alpha channel.
+
+**Backwards compatibility:** Existing `skellMetallicStrength`, smoothness, glow and saved body tint color/strength values are retained. Previously stored **Red Metallic** and **Green Body** enable toggles are deliberately **not** migrated: users must explicitly enable the new **Green Metallic** and **Alpha Custom Color** functions to avoid unexpectedly changing old materials. The deprecated **legacy four-zone paint experiment** remains off by default and is bypassed when any newly assigned RGBA role is enabled.
+
+The generated shader is still a **diagnostic material preview**, not Monolith Soft's original PBR lighting model. No `.camdo`, `.sar`, `.hkt`, `*_rig.hkt` or external `.mat` overrides are overwritten. If an external material override is active, clear it temporarily to test the importer-generated shader or manually change that material. GitHub Actions tests source-level contracts and Unity package construction, not on-device shader compilation or visual quality.
+
+## Skell _RGB Red Metallic / Green Body / Blue Glow (v0.13.3 — historical, superseded)
 
 **New observed color-mask interpretation:** the user's latest comparison with the game identifies the third role of Skell `*_RGB` companion textures: **R = metallic surface coverage**, alongside the previously confirmed **G = customizable body tint mask** and **B = emission/glow mask**. The fourth BC1 alpha channel and original roughness/smoothness mapping remain unverified; do **not** repurpose alpha as smoothness.
 

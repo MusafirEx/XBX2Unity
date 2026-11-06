@@ -13,6 +13,7 @@ using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Serialization;
 
 namespace MusafirEx.XBX2Unity.Editor
 {
@@ -64,22 +65,34 @@ namespace MusafirEx.XBX2Unity.Editor
         public Color skellPaintColor2 = Color.white;
         public Color skellPaintColor3 = Color.white;
         public Color skellPaintColor4 = Color.white;
-        [Range(0, 15)] public int skellLayerDebugView = 0;
+        [Range(0, 17)] public int skellLayerDebugView = 0;
 
-        [Header("Observed Skell RGB Channels - R Metallic / G Body / B Glow")]
-        [Tooltip("User-confirmed: the _RGB Red channel controls metallic regions. " +
-                 "Opt-in view-dependent metallic preview on generated materials only.")]
-        public bool skellUseObservedRedMetallic = false;
+        [Header("Skell RGBA Channel Mapping - R Bump / G Metallic / B Glow / A Color")]
+        [Tooltip("Use the companion Red channel as scalar bump/height data. " +
+                 "Perturbs shading normals using derivatives, not vertex positions; " +
+                 "this single channel is NOT an encoded tangent-space normal map.")]
+        public bool skellUseObservedRedBump = false;
+        [Range(0f, 4f)] public float skellRedBumpStrength = 1f;
+        [Range(0.1f, 8f)] public float skellRedBumpMaskGain = 1f;
+        [Tooltip("Use companion Green channel as metallic coverage. " +
+                 "Old Red Metallic toggle is not migrated (OFF by default).")]
+        public bool skellUseObservedGreenMetallic = false;
         [Range(0f, 1f)] public float skellMetallicStrength = 1f;
         [Range(0.1f, 8f)] public float skellMetallicMaskGain = 1f;
-        [Tooltip("Smoothness is adjustable: the original roughness channel is not yet verified.")]
+        [Tooltip("Smoothness is adjustable: the original roughness channel is not verified.")]
         [Range(0f, 1f)] public float skellMetallicSmoothness = 0.6f;
         [Range(0f, 2f)] public float skellMetallicHighlightStrength = 1f;
-        [Tooltip("Observed in the game on dl099110: the _RGB Green channel marks the body. Tint only the generated layer preview, no external .mat changes.")]
-        public bool skellUseObservedGreenBody = false;
-        public Color skellBodyColor = Color.white;
-        [Range(0f, 1f)] public float skellBodyStrength = 1f;
-        [Range(0.1f, 8f)] public float skellBodyMaskGain = 1f;
+        [Tooltip("Use companion Alpha channel to mask CUSTOM COLOR tint. " +
+                 "Alpha is a SCALAR mask, not an encoded RGB color; BC1 alpha " +
+                 "may be 1-bit or entirely opaque. Prior Green Body toggle " +
+                 "is deliberately not migrated to avoid accidental full-body tint.")]
+        public bool skellUseObservedAlphaColor = false;
+        [FormerlySerializedAs("skellBodyColor")]
+        public Color skellAlphaTintColor = Color.white;
+        [FormerlySerializedAs("skellBodyStrength")]
+        [Range(0f, 1f)] public float skellAlphaColorStrength = 1f;
+        [FormerlySerializedAs("skellBodyMaskGain")]
+        [Range(0.1f, 8f)] public float skellAlphaMaskGain = 1f;
         [Tooltip("Observed in the game on dl099110: _RGB Blue channel marks glowing parts. This unlit shader gives an additive preview, not native light/bloom.")]
         public bool skellUseObservedBlueGlow = false;
         [ColorUsage(true, true)] public Color skellGlowColor = new Color(0.2f, 0.6f, 1f, 1f);
@@ -552,12 +565,21 @@ namespace MusafirEx.XBX2Unity.Editor
                                         if (mat.HasProperty("_UsePaintMask"))
                                             mat.SetFloat("_UsePaintMask", hasCandidate &&
                                                 skellUseRgbCompanionAsPaintMask ? 1f : 0f);
-                                        // User-observed _RGB roles: R metallic, G body,
-                                        // B glow. Apply only to GENERATED preview mats.
-                                        // External .mat overrides are never changed.
-                                        if (mat.HasProperty("_UseObservedRedMetallic"))
-                                            mat.SetFloat("_UseObservedRedMetallic",
-                                                hasCandidate && skellUseObservedRedMetallic ? 1f : 0f);
+                                        // User-requested companion RGBA roles:
+                                        // R height bump, G metallic, B glow,
+                                        // A scalar color/tint mask. All opt-in and
+                                        // limited to generated Skell Layer Preview
+                                        // materials. External .mat overrides win.
+                                        if (mat.HasProperty("_UseObservedRedBump"))
+                                            mat.SetFloat("_UseObservedRedBump",
+                                                hasCandidate && skellUseObservedRedBump ? 1f : 0f);
+                                        if (mat.HasProperty("_BumpStrength"))
+                                            mat.SetFloat("_BumpStrength", skellRedBumpStrength);
+                                        if (mat.HasProperty("_BumpMaskGain"))
+                                            mat.SetFloat("_BumpMaskGain", skellRedBumpMaskGain);
+                                        if (mat.HasProperty("_UseObservedGreenMetallic"))
+                                            mat.SetFloat("_UseObservedGreenMetallic",
+                                                hasCandidate && skellUseObservedGreenMetallic ? 1f : 0f);
                                         if (mat.HasProperty("_MetallicStrength"))
                                             mat.SetFloat("_MetallicStrength", skellMetallicStrength);
                                         if (mat.HasProperty("_MetallicMaskGain"))
@@ -567,18 +589,18 @@ namespace MusafirEx.XBX2Unity.Editor
                                         if (mat.HasProperty("_MetallicHighlightStrength"))
                                             mat.SetFloat("_MetallicHighlightStrength",
                                                 skellMetallicHighlightStrength);
-                                        if (mat.HasProperty("_UseObservedGreenBody"))
-                                            mat.SetFloat("_UseObservedGreenBody",
-                                                hasCandidate && skellUseObservedGreenBody ? 1f : 0f);
+                                        if (mat.HasProperty("_UseObservedAlphaColor"))
+                                            mat.SetFloat("_UseObservedAlphaColor",
+                                                hasCandidate && skellUseObservedAlphaColor ? 1f : 0f);
+                                        if (mat.HasProperty("_AlphaTintColor"))
+                                            mat.SetColor("_AlphaTintColor", skellAlphaTintColor);
+                                        if (mat.HasProperty("_AlphaColorStrength"))
+                                            mat.SetFloat("_AlphaColorStrength", skellAlphaColorStrength);
+                                        if (mat.HasProperty("_AlphaMaskGain"))
+                                            mat.SetFloat("_AlphaMaskGain", skellAlphaMaskGain);
                                         if (mat.HasProperty("_UseObservedBlueGlow"))
                                             mat.SetFloat("_UseObservedBlueGlow",
                                                 hasCandidate && skellUseObservedBlueGlow ? 1f : 0f);
-                                        if (mat.HasProperty("_BodyPaintColor"))
-                                            mat.SetColor("_BodyPaintColor", skellBodyColor);
-                                        if (mat.HasProperty("_BodyMaskStrength"))
-                                            mat.SetFloat("_BodyMaskStrength", skellBodyStrength);
-                                        if (mat.HasProperty("_BodyMaskGain"))
-                                            mat.SetFloat("_BodyMaskGain", skellBodyMaskGain);
                                         if (mat.HasProperty("_GlowColor"))
                                             mat.SetColor("_GlowColor", skellGlowColor);
                                         if (mat.HasProperty("_GlowIntensity"))

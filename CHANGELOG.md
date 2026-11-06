@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.13.4 - 2026-11-06 (Skell RGBA role remap)
+- Apply the user's revised `*_RGB` companion channel semantics **R = Bump/Height; G = Metallic; B = Glow; A = Custom Color**. Supersede v0.13.3 Red Metallic / Green Body; preserve Blue glow.
+- Red: add scalar height-map normal perturbation using `ddx`/`ddy` of the height and world position. No invented packed XYZ normal or geometric vertex displacement. Red height detail also perturbs the Green metallic highlight; a small diagnostic Lambert difference visualizes bump without metal.
+- Green: reuse Fresnel/GGX-inspired metallic preview and configurable smoothness, with **green** mask instead of previous red; body recoloring is removed from green.
+- Blue: preserve existing additive glow behavior and intensity/color settings.
+- Alpha: interpret as a **scalar color-tint coverage mask** with selectable custom RGB tint. This does not imply Alpha stores color; on source BC1/DXT1 alpha may be just 1-bit or uniformly opaque, so tint may affect the entire surface.
+- Add opt-in importer/Inspector fields for Red Bump, Green Metallic, Blue Glow and Alpha Color; all new enable toggles start OFF and do not silently reapply old mismatched role toggles. Keep source mask sampling linear, preserve existing source textures, material overrides and HKT/rig data. FormerlySerializedAs preserves stored color/strength/gain fields as appropriate.
+- Extend debug views from 0–15 to 0–17, relabel Green and Red roles while keeping index meaning as raw source mask; new 16=Alpha Color Coverage, 17=Perturbed Normal. Legacy four-zone RGBA paint mode still opt-in and bypassed by the newly assigned roles.
+- Update source-role descriptions, README and Python regression contracts. Unity Editor shader compilation and visual playback remain for user validation.
+
+
 ## 0.13.3 - 2026-11-06 (source-observed Skell RGB red metallic mask)
 - User confirmed the source Skell `*_RGB` red channel represents **metallic coverage**; green remains body recoloring and blue remains glow. Alpha and game roughness/smoothness are still unidentified, and the historical four-zone RGBA paint hypothesis remains experimental.
 - Extend existing `XBX2Unity/Skell Layer Preview` shader with independent opt-in **Red Metallic Surface Preview** (`_UseObservedRedMetallic`, `_MetallicStrength`, `_MetallicMaskGain`, `_MetallicSmoothness`, `_MetallicHighlightStrength`). Decode red directly from the previously verified **linear BC1 _RGB companion mask**; metallic is proportional to red coverage (0=unchanged, 1=metal).
